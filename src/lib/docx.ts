@@ -1,8 +1,8 @@
-import * as docx from "docx";
 import { saveAs } from "file-saver";
 import type { Question } from "./gemini";
 
 export async function generateQuestionsDocx(topic: string, questions: Question[]) {
+  const docx = await import("docx");
   const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = docx;
   
   const doc = new Document({

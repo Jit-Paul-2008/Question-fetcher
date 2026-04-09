@@ -1,7 +1,7 @@
-import jsPDF from "jspdf";
 import type { Question } from "./gemini";
 
-export function generateQuestionsPDF(topic: string, questions: Question[]) {
+export async function generateQuestionsPDF(topic: string, questions: Question[]) {
+  const { jsPDF } = await import("jspdf");
   if (!jsPDF) {
     console.error("jsPDF is not loaded correctly");
     return;
