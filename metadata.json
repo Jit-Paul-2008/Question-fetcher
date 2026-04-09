@@ -1,0 +1,7 @@
+{
+  "name": "ChemScan: Chemistry Note Analyzer",
+  "description": "Scan chemistry notes, extract topics, and find relevant exam questions from JEE, CBSE, and more.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
