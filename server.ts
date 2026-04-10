@@ -712,32 +712,30 @@ async function startServer() {
             maxOutputTokens: 4096,
             temperature: 0.1,
             responseMimeType: "application/json",
-            config: {
-              responseMimeType: "application/json",
-              responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                  questions: {
-                    type: Type.ARRAY,
-                    items: {
-                      type: Type.OBJECT,
-                      properties: {
-                        question: { type: Type.STRING },
-                        options: { type: Type.ARRAY, items: { type: Type.STRING } },
-                        correctAnswer: { type: Type.STRING },
-                        source: { type: Type.STRING },
-                        year: { type: Type.STRING },
-                        difficulty: { type: Type.STRING },
-                        targetExam: { type: Type.STRING },
-                        topic: { type: Type.STRING },
-                      },
-                      required: ["question", "options", "correctAnswer", "source", "year", "difficulty", "targetExam", "topic"],
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                questions: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      question: { type: Type.STRING },
+                      options: { type: Type.ARRAY, items: { type: Type.STRING } },
+                      correctAnswer: { type: Type.STRING },
+                      source: { type: Type.STRING },
+                      year: { type: Type.STRING },
+                      difficulty: { type: Type.STRING },
+                      targetExam: { type: Type.STRING },
+                      topic: { type: Type.STRING },
                     },
+                    required: ["question", "options", "correctAnswer", "source", "year", "difficulty", "targetExam", "topic"],
                   },
                 },
-                required: ["questions"],
               },
+              required: ["questions"],
             },
+          },
         })
       );
 

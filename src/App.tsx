@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import {
   Upload, Search, FileText, Download, CheckCircle2,
-  Loader2, X, ChevronRight, BookOpen, Layers,
+  Loader2, X, ChevronRight, ChevronLeft, BookOpen, Layers,
   LogOut, Coins, FlaskConical, FileBox,
   Globe, Users, GraduationCap, Share2, Sparkles,
 } from "lucide-react";
@@ -94,6 +94,7 @@ export default function App() {
   const [targetClass, setTargetClass] = useState("12");
   const [isScanning, setIsScanning] = useState(false);
   const [result, setResult] = useState<ScanResult | null>(null);
+  const [currentQuestionIdx, setCurrentQuestionIdx] = useState(0);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [isBuying, setIsBuying] = useState<string | null>(null);
@@ -213,6 +214,7 @@ export default function App() {
       const idToken = await user!.getIdToken();
       const scanResult = await scanSubjectNote(scanMode === "notes" ? images : [], topic, subject, selectedExams, targetClass, idToken);
       setResult(scanResult);
+      setCurrentQuestionIdx(0);
       setCredits(prev => prev - 1);
       await addDoc(collection(db, `users/${user!.uid}/history`), {
         topicDetected: scanResult.topicDetected,
@@ -431,7 +433,7 @@ export default function App() {
                 <div className="lg:col-span-7">
                   {result ? (
                     <Card className="border-none shadow-claude-whisper bg-white rounded-claude-3xl overflow-hidden">
-                      <CardHeader className="p-10 border-b border-claude-border-cream">
+                      <CardHeader className="p-10 border-b border-claude-border-cream relative">
                         <div className="flex justify-between items-start">
                           <div>
                             <h2 className="text-4xl font-serif font-medium text-claude-near-black mb-2">{result.topicDetected}</h2>
@@ -442,29 +444,73 @@ export default function App() {
                             <Button variant="outline" size="sm" className="rounded-full text-[10px] font-bold" onClick={() => createClassroom(result)}><Users className="w-3 h-3 mr-2" />CLASS</Button>
                           </div>
                         </div>
+                        <div className="absolute -bottom-px left-10 right-10 flex gap-1">
+                          {result.questions.map((_, i) => (
+                            <div key={i} className={`h-1 flex-1 transition-colors ${i === currentQuestionIdx ? "bg-claude-terracotta" : "bg-claude-border-cream"}`} />
+                          ))}
+                        </div>
                       </CardHeader>
-                      <CardContent className="p-10 space-y-8">
-                        {result.questions.map((q, i) => (
-                          <div key={i} className="p-8 bg-claude-ivory rounded-claude-2xl border border-claude-border-cream relative group shadow-sm">
-                            <span className="absolute -top-3 left-8 px-4 py-1 bg-claude-terracotta text-white text-[10px] font-bold rounded-full">QUESTION {i + 1}</span>
-                            <p className="text-xl font-medium mb-6 leading-relaxed">{q.question}</p>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              {q.options.map((opt, j) => (
-                                <div key={j} className={`p-4 rounded-claude-xl border flex items-center gap-4 text-sm ${opt === q.correctAnswer ? "bg-green-50 border-green-200 text-green-800" : "bg-white border-claude-border-cream"}`}>
-                                  <div className="w-6 h-6 rounded-full bg-claude-parchment flex items-center justify-center font-bold text-[10px]">{String.fromCharCode(65 + j)}</div>
-                                  {opt}
-                                </div>
-                              ))}
+                      <CardContent className="p-10 min-h-[550px] flex flex-col justify-between">
+                        <AnimatePresence mode="wait">
+                          <motion.div
+                            key={currentQuestionIdx}
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -20 }}
+                            transition={{ duration: 0.3 }}
+                            className="space-y-8"
+                          >
+                            <div className="p-8 bg-claude-ivory rounded-claude-2xl border border-claude-border-cream relative shadow-sm min-h-[350px]">
+                              <div className="flex justify-between items-start mb-8">
+                                <span className="px-4 py-1 bg-claude-terracotta text-white text-[10px] font-bold rounded-full uppercase tracking-widest">Question {currentQuestionIdx + 1} of {result.questions.length}</span>
+                                <Badge variant="outline" className="uppercase tracking-widest text-[9px] font-bold">{result.questions[currentQuestionIdx].difficulty}</Badge>
+                              </div>
+
+                              <p className="text-2xl font-medium mb-10 leading-relaxed text-claude-near-black">
+                                {result.questions[currentQuestionIdx].question}
+                              </p>
+
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {result.questions[currentQuestionIdx].options.map((opt, j) => (
+                                  <div key={j} className={`p-5 rounded-claude-xl border flex items-center gap-4 text-sm transition-all ${opt === result.questions[currentQuestionIdx].correctAnswer ? "bg-green-50/50 border-green-200 text-green-800 ring-1 ring-green-100" : "bg-white border-claude-border-cream shadow-sm"}`}>
+                                    <div className="w-8 h-8 rounded-full bg-claude-parchment flex items-center justify-center font-bold text-[11px] shadow-sm">{String.fromCharCode(65 + j)}</div>
+                                    <span className="font-serif leading-snug">{opt}</span>
+                                  </div>
+                                ))}
+                              </div>
+
+                              <div className="mt-10 pt-6 border-t border-claude-border-cream flex justify-between items-center group">
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-claude-terracotta bg-claude-terracotta/5 px-3 py-1.5 rounded-full">{result.questions[currentQuestionIdx].targetExam}</span>
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-claude-stone-gray italic">{result.questions[currentQuestionIdx].source}</span>
+                              </div>
                             </div>
-                            <div className="mt-8 pt-6 border-t border-claude-border-cream flex justify-between items-center opacity-60">
-                              <Badge variant="outline" className="uppercase tracking-widest text-[9px] font-bold">{q.difficulty}</Badge>
-                              <span className="text-[10px] font-bold uppercase tracking-widest text-claude-terracotta">{q.targetExam}</span>
-                            </div>
+                          </motion.div>
+                        </AnimatePresence>
+
+                        <div className="flex items-center justify-between mt-10">
+                          <div className="flex gap-3">
+                            <Button
+                              variant="outline"
+                              className="h-14 w-14 rounded-claude-xl border-claude-border-cream disabled:opacity-30"
+                              disabled={currentQuestionIdx === 0}
+                              onClick={() => setCurrentQuestionIdx(p => p - 1)}
+                            >
+                              <ChevronLeft className="w-5 h-5" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              className="h-14 w-14 rounded-claude-xl border-claude-border-cream disabled:opacity-30"
+                              disabled={currentQuestionIdx === result.questions.length - 1}
+                              onClick={() => setCurrentQuestionIdx(p => p + 1)}
+                            >
+                              <ChevronRight className="w-5 h-5" />
+                            </Button>
                           </div>
-                        ))}
-                        <div className="flex gap-4">
-                          <Button className="flex-1 h-14 bg-claude-near-black text-white rounded-claude-xl" onClick={() => generateQuestionsPDF(result.topicDetected, result.questions)}><Download className="w-5 h-5 mr-3" /> Export PDF</Button>
-                          <Button variant="warm-sand" className="flex-1 h-14 rounded-claude-xl" onClick={() => generateQuestionsDocx(result.topicDetected, result.questions)}>Download DOCX</Button>
+
+                          <div className="flex gap-4 flex-1 ml-10">
+                            <Button className="flex-1 h-14 bg-claude-near-black text-white rounded-claude-xl shadow-lg hover:shadow-claude-ring transition-all" onClick={() => generateQuestionsPDF(result.topicDetected, result.questions)}><Download className="w-5 h-5 mr-3" /> Export PDF</Button>
+                            <Button variant="warm-sand" className="flex-1 h-14 rounded-claude-xl border border-claude-border-cream hover:bg-claude-ivory transition-all" onClick={() => generateQuestionsDocx(result.topicDetected, result.questions)}>Docx</Button>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
