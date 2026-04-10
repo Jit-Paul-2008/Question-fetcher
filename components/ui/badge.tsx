@@ -9,7 +9,6 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
-      variant: {
         default: "bg-claude-terracotta text-claude-ivory hover:bg-claude-terracotta/90",
         secondary:
           "bg-claude-warm-sand text-claude-near-black hover:bg-claude-warm-sand/80",

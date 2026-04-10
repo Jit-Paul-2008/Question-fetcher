@@ -126,7 +126,7 @@ async function startServer() {
   // ─── Razorpay: Create Order ───────────────────────────────────────────────
   app.post("/api/create-order", async (req, res) => {
     try {
-      const { packId } = req.body;
+      const { packId, uid } = req.body; // Added uid
       const pack = CREDIT_PACKS[packId as PackId];
       if (!pack) return res.status(400).json({ error: "Invalid pack ID" });
 
@@ -134,7 +134,11 @@ async function startServer() {
       const order = await rzp.orders.create({
         amount: pack.amount,
         currency: "INR",
-        notes: { packId, credits: String(pack.credits) },
+        notes: { 
+          packId, 
+          credits: String(pack.credits), 
+          uid: uid || "unknown" // Store uid in order for webhook retrieval
+        },
       });
 
       res.json({ orderId: order.id, amount: pack.amount, currency: "INR", packId });
@@ -144,7 +148,66 @@ async function startServer() {
     }
   });
 
-  // ─── RAZORPAY: Verify Payment + Add Credits ───────────────────────────────
+  // ─── Helper: Atomically Add Credits with Deduplication ───────────────────
+  async function creditUser(uid: string, creditsToAdd: number, paymentId: string, packId: string) {
+    const paymentRef = db.collection("payments").doc(paymentId);
+    const profileRef = db.doc(`users/${uid}/profile/data`);
+
+    await db.runTransaction(async (t) => {
+      const paymentDoc = await t.get(paymentRef);
+      if (paymentDoc.exists) {
+        console.log(`[Deduplication] Payment ${paymentId} already processed.`);
+        return;
+      }
+
+      const profileDoc = await t.get(profileRef);
+      const current = profileDoc.exists ? (profileDoc.data()?.credits || 0) : 0;
+
+      t.set(paymentRef, {
+        uid,
+        packId,
+        credits: creditsToAdd,
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      t.set(profileRef, { credits: current + creditsToAdd }, { merge: true });
+    });
+  }
+
+  // ─── Helper: Revoke Credits on Refund ────────────────────────────────────
+  async function revokeCredits(paymentId: string) {
+    const paymentRef = db.collection("payments").doc(paymentId);
+
+    await db.runTransaction(async (t) => {
+      const paymentDoc = await t.get(paymentRef);
+      if (!paymentDoc.exists) {
+        console.warn(`[Refund] No record found for payment ${paymentId}. Cannot revoke credits.`);
+        return;
+      }
+
+      const data = paymentDoc.data()!;
+      if (data.refunded) {
+        console.log(`[Refund] Already processed for ${paymentId}.`);
+        return;
+      }
+
+      const { uid, credits } = data;
+      const profileRef = db.doc(`users/${uid}/profile/data`);
+      const profileDoc = await t.get(profileRef);
+
+      const current = profileDoc.exists ? (profileDoc.data()?.credits || 0) : 0;
+
+      // Deduct credits, ensuring we don't go negative
+      t.set(profileRef, { credits: Math.max(0, current - credits) }, { merge: true });
+      // Mark payment as refunded in our tracker
+      t.update(paymentRef, { refunded: true, refundTimestamp: admin.firestore.FieldValue.serverTimestamp() });
+
+      console.log(`[Refund:Success] Revoked ${credits} credits from ${uid} for payment ${paymentId}`);
+    });
+  }
+
+
+  // ─── RAZORPAY: Verify Payment (Client-side callback) ─────────────────────
   app.post("/api/verify-payment", async (req, res) => {
     try {
       const uid = await verifyToken(req.headers.authorization);
@@ -153,7 +216,6 @@ async function startServer() {
       const pack = CREDIT_PACKS[packId as PackId];
       if (!pack) return res.status(400).json({ error: "Invalid pack ID" });
 
-      // Cryptographic signature verification (cannot be forged)
       const keySecret = process.env.RAZORPAY_KEY_SECRET;
       if (!keySecret) return res.status(500).json({ error: "Server config error" });
 
@@ -166,21 +228,74 @@ async function startServer() {
         return res.status(400).json({ error: "Payment verification failed" });
       }
 
-      // Atomically add credits (Firebase transaction — race-condition safe)
-      const profileRef = db.doc(`users/${uid}/profile/data`);
-      await db.runTransaction(async (t) => {
-        const doc = await t.get(profileRef);
-        const current = doc.exists ? (doc.data()?.credits || 0) : 0;
-        t.set(profileRef, { credits: current + pack.credits }, { merge: true });
-      });
+      // Use the deduplicated credit helper
+      await creditUser(uid, pack.credits, razorpay_payment_id, packId);
 
-      console.log(`[Payment] uid=${uid} pack=${packId} credits=${pack.credits}`);
+      console.log(`[Payment:Verify] uid=${uid} pack=${packId} credits=${pack.credits}`);
       res.json({ success: true, creditsAdded: pack.credits });
     } catch (err: any) {
       console.error("Verify payment error:", err);
       res.status(500).json({ error: err.message });
     }
   });
+
+  // ─── RAZORPAY: Webhook (Server-to-Server reliability) ─────────────────────
+  app.post("/api/razorpay-webhook", async (req: express.Request, res: express.Response) => {
+    const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
+    const signature = req.headers["x-razorpay-signature"] as string;
+
+    // 1. Verify webhook signature
+    if (secret && signature) {
+      const expectedSig = crypto
+        .createHmac("sha256", secret)
+        .update(req.body) // req.body is raw buffer because of express.raw middleware at line 74
+        .digest("hex");
+
+      if (expectedSig !== signature) {
+        console.warn("[Webhook] Invalid signature received.");
+        return res.status(400).send("Invalid signature");
+      }
+    } else if (!signature && secret) {
+       console.warn("[Webhook] Missing signature header.");
+       return res.status(400).send("Missing signature");
+    }
+
+    try {
+      // Parse raw body buffer to JSON
+      const event = JSON.parse(req.body.toString());
+      console.log(`[Webhook] Event: ${event.event}`);
+
+      if (event.event === "payment.captured") {
+        const payment = event.payload.payment.entity;
+        const { order_id, id: payment_id, notes } = payment;
+        const { uid, packId, credits } = notes || {};
+
+        if (uid && packId && credits) {
+          await creditUser(uid, parseInt(credits, 10), payment_id, packId);
+          console.log(`[Webhook:Capture] Credited ${credits} to ${uid} for payment ${payment_id}`);
+        } else {
+          console.warn(`[Webhook] Missing notes in payment ${payment_id}`, notes);
+        }
+      } 
+      else if (event.event === "refund.processed") {
+        const refund = event.payload.refund.entity;
+        const payment_id = refund.payment_id;
+        console.log(`[Webhook:Refund] Processing refund for payment ${payment_id}`);
+        await revokeCredits(payment_id);
+      } 
+      else if (event.event === "payment.failed") {
+        const payment = event.payload.payment.entity;
+        console.warn(`[Webhook:Failed] Payment ${payment.id} failed. Reason: ${payment.error_description || "Unknown"}`);
+      }
+
+      res.status(200).json({ status: "ok" });
+    } catch (err: any) {
+
+      console.error("[Webhook] Processing error:", err.message);
+      res.status(500).send("Internal Error");
+    }
+  });
+
 
   // ─── SECURE SCAN PIPELINE ─────────────────────────────────────────────────
   // Exactly 2 Gemini calls + 3 Tavily searches, regardless of image/topic count

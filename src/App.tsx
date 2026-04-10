@@ -253,7 +253,7 @@ export default function App() {
       const orderRes = await fetch("/api/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ packId }),
+        body: JSON.stringify({ packId, uid: user.uid }),
       });
       const { orderId, amount, currency } = await orderRes.json();
 
@@ -267,6 +267,18 @@ export default function App() {
         name: "ChemScan",
         description: creditPacks[packId]?.name || "Credit Pack",
         image: "/favicon.ico",
+        config: {
+          display: {
+            blocks: {
+              upi: {
+                name: "Pay via UPI or QR",
+                instruments: [{ method: "upi" }],
+              },
+            },
+            sequence: ["block.upi"],
+            preferences: { show_default_blocks: true },
+          },
+        },
         handler: async (response: any) => {
           try {
             const verifyRes = await fetch("/api/verify-payment", {
@@ -297,6 +309,7 @@ export default function App() {
         theme: { color: "#2563EB" },
         modal: { ondismiss: () => setIsBuying(null) },
       };
+
 
       new (window as any).Razorpay(options).open();
     } catch (err: any) {
