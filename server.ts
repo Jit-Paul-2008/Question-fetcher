@@ -50,7 +50,7 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 2000): Pr
     } catch (err: any) {
       lastError = err;
       // Check for 503 or overload messages
-      const is503 = err.message?.includes("503") || err.status === 503 || err.code === 503 || err.message?.includes("high demand");
+      const is503 = err.message?.includes("503") || err.status === 503 || err.code === 503 || err.message?.includes("high demand") || err.message?.includes("UNAVAILABLE");
       if (is503 && i < retries - 1) {
         console.warn(`[Retry] Gemini busy/503. Retrying in ${delay}ms... (Attempt ${i + 1}/${retries})`);
         await new Promise(resolve => setTimeout(resolve, delay));
@@ -262,23 +262,25 @@ async function startServer() {
         `Query 3: Cover remaining topics + HOTS. Format: (remainingTopic1 OR remainingTopic2) ${subjectLabel} HOTS important questions ${allExams}`,
       ].join("\n");
 
-      const analysisResponse = await withRetry(() => ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: { parts: [...contentParts, { text: analysisPrompt }] },
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              topicDetected: { type: Type.STRING },
-              summary: { type: Type.STRING },
-              keywords: { type: Type.ARRAY, items: { type: Type.STRING } },
-              searchQueries: { type: Type.ARRAY, items: { type: Type.STRING } },
+      const analysisResponse = await withRetry(() =>
+        ai.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: { parts: [...contentParts, { text: analysisPrompt }] },
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                topicDetected: { type: Type.STRING },
+                summary: { type: Type.STRING },
+                keywords: { type: Type.ARRAY, items: { type: Type.STRING } },
+                searchQueries: { type: Type.ARRAY, items: { type: Type.STRING } },
+              },
+              required: ["topicDetected", "summary", "keywords", "searchQueries"],
             },
-            required: ["topicDetected", "summary", "keywords", "searchQueries"],
           },
-        },
-      }));
+        })
+      );
 
       let analysisText = "";
       try {
@@ -333,41 +335,45 @@ async function startServer() {
         "- Each question must have exactly 4 options (A, B, C, D) and a correct answer.",
         "- Provide a solution key.",
         "- Categorize as: PYQ, Sample Paper, HOTS, or Practice",
-        "- Include source URL if available, otherwise use 'AI Synthetic'.",
+        "- **Detailed Source Instruction**: Specify where the question is from in detail (e.g., 'PYQ 2023 JEE Mains', 'NEET 2021', 'CBSE Board 2020').",
+        "- **NO LINKS**: Do NOT include any URLs or web links in the source field. Use only text describing the source.",
+        "- **NO REPETITION**: Do not provide duplicate questions. Each question must be unique in content and phrasing.",
         `- Aim for 10-20 valid questions. Stay within ${subjectLabel}: "${analysis.topicDetected}".`,
         "",
         combined.length > 0 ? `Search Results:\n${combined.join("\n---\n")}` : "No search results available. Proceed with expert generation.",
       ].join("\n");
 
-      const structureResponse = await withRetry(() => ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: structurePrompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              questions: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    text: { type: Type.STRING },
-                    options: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    answer: { type: Type.STRING },
-                    source: { type: Type.STRING },
-                    year: { type: Type.STRING },
-                    type: { type: Type.STRING },
-                    topic: { type: Type.STRING },
+      const structureResponse = await withRetry(() =>
+        ai.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: structurePrompt,
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                questions: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      text: { type: Type.STRING },
+                      options: { type: Type.ARRAY, items: { type: Type.STRING } },
+                      answer: { type: Type.STRING },
+                      source: { type: Type.STRING },
+                      year: { type: Type.STRING },
+                      type: { type: Type.STRING },
+                      topic: { type: Type.STRING },
+                    },
+                    required: ["text", "options", "answer", "source", "year", "type", "topic"],
                   },
-                  required: ["text", "options", "answer", "source", "year", "type", "topic"],
                 },
               },
+              required: ["questions"],
             },
-            required: ["questions"],
           },
-        },
-      }));
+        })
+      );
 
       let structuredText = "";
       try {
@@ -381,11 +387,31 @@ async function startServer() {
       let structured: any = {};
       try {
         structured = JSON.parse(structuredText || "{}");
+        
+        // ── Post-processing: Source detail & Deduplication ──
+        if (structured.questions && Array.isArray(structured.questions)) {
+          const uniqueTexts = new Set<string>();
+          structured.questions = structured.questions.filter((q: any) => {
+            // 1. Remove URLs from source (Safety Fallback)
+            if (q.source) {
+              q.source = q.source.replace(/https?:\/\/[^\s]+/g, "").trim();
+              if (!q.source) q.source = "Standard Practice Question";
+            }
+            
+            // 2. Strict Deduplication by text content
+            const normalizedText = (q.text || "").toLowerCase().replace(/\s+/g, " ").trim();
+            if (!normalizedText || uniqueTexts.has(normalizedText)) {
+              return false;
+            }
+            uniqueTexts.add(normalizedText);
+            return true;
+          });
+        }
       } catch (err) {
         await profileRef.update({ credits: admin.firestore.FieldValue.increment(1) }).catch(() => {});
         return res.status(500).json({ error: "AI structuring format error. Please try again." });
       }
-      console.log(`[Scan] Extracted ${structured.questions?.length || 0} questions`);
+      console.log(`[Scan] Extracted ${structured.questions?.length || 0} unique questions`);
 
       res.json({
         topicDetected: analysis.topicDetected,
@@ -401,7 +427,12 @@ async function startServer() {
           .catch(() => { }); // best-effort refund
       }
       console.error("Scan error details:", error);
-      let message = error.message || "Internal server error";
+      
+      const isHighDemand = error.message?.includes("503") || error.message?.includes("high demand") || error.status === 503;
+      let message = isHighDemand 
+        ? "Google's AI servers are currently experiencing high demand. Please try again in 5-10 minutes."
+        : (error.message || "Internal server error");
+
       if (error.code === "permission-denied" || (error.message && error.message.includes("credential"))) {
         message = "Firebase Admin credential error. If running locally, please set up GOOGLE_APPLICATION_CREDENTIALS or run 'gcloud auth application-default login'.";
       }
