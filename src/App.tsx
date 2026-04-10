@@ -507,11 +507,11 @@ export default function App() {
                       </div>
                       <div className="flex gap-2">
                         <Button variant="outline" size="sm" className="rounded-xl border-gray-200"
-                          onClick={() => generateQuestionsPDF(result.topicDetected, result.questions)}>
+                          onClick={() => generateQuestionsPDF(result.topicDetected, result.questions, subject)}>
                           <Download className="w-4 h-4 mr-2" />PDF
                         </Button>
                         <Button variant="outline" size="sm" className="rounded-xl border-gray-200"
-                          onClick={() => generateQuestionsDocx(result.topicDetected, result.questions)}>
+                          onClick={() => generateQuestionsDocx(result.topicDetected, result.questions, subject)}>
                           <FileText className="w-4 h-4 mr-2" />DOCX
                         </Button>
                       </div>

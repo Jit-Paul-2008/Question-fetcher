@@ -1,6 +1,6 @@
 import type { Question } from "./gemini";
 
-export async function generateQuestionsPDF(topic: string, questions: Question[]) {
+export async function generateQuestionsPDF(topic: string, questions: Question[], subject: string = "Subject") {
   const { jsPDF } = await import("jspdf");
   if (!jsPDF) {
     console.error("jsPDF is not loaded correctly");
@@ -14,7 +14,7 @@ export async function generateQuestionsPDF(topic: string, questions: Question[])
   // Title
   doc.setFontSize(22);
   doc.setTextColor(40, 40, 40);
-  doc.text("Chemistry Question Bank", pageWidth / 2, y, { align: "center" });
+  doc.text(`${subject} Question Bank`, pageWidth / 2, y, { align: "center" });
   y += 10;
 
   doc.setFontSize(14);
@@ -68,5 +68,5 @@ export async function generateQuestionsPDF(topic: string, questions: Question[])
     y += 15;
   });
 
-  doc.save(`Chemistry_Questions_${topic.replace(/\s+/g, "_")}.pdf`);
+  doc.save(`${subject}_Questions_${topic.replace(/\s+/g, "_")}.pdf`);
 }

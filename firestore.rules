@@ -60,8 +60,10 @@ service cloud.firestore {
       allow read: if isOwner(userId);
       // Allow users to initialize their profile only with the starter 3 credits
       allow create: if isOwner(userId) && request.resource.data.credits == 3;
-      // Block all client-side updates to credits (must be done by server)
-      allow update: if false;
+      // Block all client-side updates EXCEPT for initial welcome credit grant
+      allow update: if isOwner(userId) 
+                    && (!resource.data.keys().hasAll(['credits']) || resource.data.credits == null)
+                    && request.resource.data.credits == 3;
       allow delete: if isOwner(userId);
     }
   }

@@ -148,17 +148,19 @@ async function startServer() {
     try {
       // 2. Validate images
       const { images, topic, subject, exams } = req.body;
-      const imageList: string[] = Array.isArray(images) ? images : [images || req.body.image];
+      const imageList: string[] = Array.isArray(images) ? images : (images ? [images] : []);
       const MAX_IMAGES = 8;
-
+      
       if (!imageList.length || !imageList[0]) {
-        return res.status(400).json({ error: "No images provided" });
+        return res.status(400).json({ error: "No files provided" });
       }
       if (imageList.length > MAX_IMAGES) {
         return res.status(400).json({
-          error: `Maximum ${MAX_IMAGES} pages per scan. You uploaded ${imageList.length}.`
+          error: `Maximum ${MAX_IMAGES} files per scan. You uploaded ${imageList.length}.`
         });
       }
+
+      const examList = Array.isArray(exams) ? exams : [];
 
       // 3. Atomically check and deduct 1 credit
       const profileRef = db.doc(`users/${uid}/profile/data`);
@@ -195,7 +197,7 @@ async function startServer() {
         "icse-10": "ICSE Class 10", "isc-12": "ISC Class 12",
         "wbsche-12": "WBSCHE Class 12",
       };
-      const examLabels = (exams as string[]).map(e => examMap[e] || e);
+      const examLabels = examList.map(e => examMap[e] || e);
       const primaryExam = examLabels[0] || "exam";
       const allExams = examLabels.join(" ");
       const subjectLabel = subject || "Chemistry";
@@ -256,7 +258,23 @@ async function startServer() {
         },
       });
 
-      const analysis = JSON.parse(analysisResponse.text || "{}");
+      let analysisText = "";
+      try {
+        // Safe access to response text
+        analysisText = analysisResponse.text || "";
+      } catch (err) {
+        // Refund and report safety block
+        await profileRef.update({ credits: admin.firestore.FieldValue.increment(1) }).catch(() => {});
+        return res.status(400).json({ error: "The AI safety filters blocked this content. Please ensure your notes are subject-appropriate." });
+      }
+
+      let analysis: any = {};
+      try {
+        analysis = JSON.parse(analysisText || "{}");
+      } catch (err) {
+        await profileRef.update({ credits: admin.firestore.FieldValue.increment(1) }).catch(() => {});
+        return res.status(500).json({ error: "AI analysis format error. Please try again." });
+      }
       console.log(`[Scan] uid=${uid} subject=${subjectLabel} topic=${analysis.topicDetected} queries=${analysis.searchQueries?.length}`);
 
       // ── STEP 2: Always exactly 3 Tavily searches — fixed cost ──
@@ -284,21 +302,19 @@ async function startServer() {
 
       // ── STEP 3: Gemini structures real questions from search results ──
       const structurePrompt = [
-        `You are a question bank organizer for ${examLabels.join(", ")} exams. Subject: ${subjectLabel}.`,
-        `Topic: "${analysis.topicDetected}".`,
-        "",
-        "Below are web search results containing real exam questions.",
-        "Your job is to EXTRACT and ORGANIZE actual questions found in these results.",
+        combined.length > 0 
+          ? `Below are web search results containing real exam questions for ${analysis.topicDetected}. Your job is to EXTRACT and ORGANIZE actual questions found in these results.`
+          : `Create high-quality original practice questions for the topic: "${analysis.topicDetected}". Since no specific web sources were found, use your expert knowledge to simulate real exam-style questions.`,
         "",
         "Rules:",
-        "- ONLY use questions that appear in the search results. Do NOT invent questions.",
+        "- If search results are present, prioritize them. If NOT, create original ones.",
         "- Each question must have exactly 4 options (A, B, C, D) and a correct answer.",
-        "- If a question lacks options, create plausible options grounded in the content.",
+        "- Provide a solution key.",
         "- Categorize as: PYQ, Sample Paper, HOTS, or Practice",
-        "- Include source URL and year if mentioned.",
-        `- Extract as many valid questions as possible (aim for 15–25). Stay within ${subjectLabel}: "${analysis.topicDetected}".`,
+        "- Include source URL if available, otherwise use 'AI Synthetic'.",
+        `- Aim for 10-20 valid questions. Stay within ${subjectLabel}: "${analysis.topicDetected}".`,
         "",
-        `Search Results:\n${combined.join("\n---\n")}`,
+        combined.length > 0 ? `Search Results:\n${combined.join("\n---\n")}` : "No search results available. Proceed with expert generation.",
       ].join("\n");
 
       const structureResponse = await ai.models.generateContent({
@@ -331,7 +347,21 @@ async function startServer() {
         },
       });
 
-      const structured = JSON.parse(structureResponse.text || "{}");
+      let structuredText = "";
+      try {
+        structuredText = structureResponse.text || "";
+      } catch (err) {
+        await profileRef.update({ credits: admin.firestore.FieldValue.increment(1) }).catch(() => {});
+        return res.status(500).json({ error: "Question structuring failed due to safety limits. Please try a more specific topic." });
+      }
+
+      let structured: any = {};
+      try {
+        structured = JSON.parse(structuredText || "{}");
+      } catch (err) {
+        await profileRef.update({ credits: admin.firestore.FieldValue.increment(1) }).catch(() => {});
+        return res.status(500).json({ error: "AI structuring format error. Please try again." });
+      }
       console.log(`[Scan] Extracted ${structured.questions?.length || 0} questions`);
 
       res.json({
@@ -347,8 +377,8 @@ async function startServer() {
           .update({ credits: admin.firestore.FieldValue.increment(1) })
           .catch(() => { }); // best-effort refund
       }
-      console.error("Scan error:", error);
-      res.status(500).json({ error: error.message });
+      console.error("Scan error details:", error);
+      res.status(500).json({ error: error.message || "Internal server error" });
     }
   });
 
