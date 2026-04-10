@@ -33,10 +33,10 @@ export async function scanChemistryNote(
 ): Promise<ScanResult> {
   const geminiKey = process.env.chem1 || process.env.GEMINI_API_KEY || getApiKey("GEMINI_API_KEY");
   const tavilyKey = process.env.TAVILY_API_KEY || process.env.TRAVILY_API_KEY || getApiKey("TAVILY_API_KEY");
-  
+
   const ai = new GoogleGenAI({ apiKey: geminiKey });
   const tv = tavily({ apiKey: tavilyKey });
-  const model = "gemini-3-flash-preview";
+  const model = "gemini-2.0-flash";
 
   // Step 1: Analyze image and generate search query
   const analysisPrompt = `
@@ -83,7 +83,7 @@ export async function scanChemistryNote(
 
   // Step 2: Search with Tavily
   const searchResults = await tv.search(analysis.searchQuery, {
-    searchDepth: "advanced",
+    searchDepth: "basic",
     maxResults: 5,
     includeAnswer: true,
   });

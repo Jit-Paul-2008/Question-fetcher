@@ -14,7 +14,6 @@ service cloud.firestore {
     //   - summary: string (required) - Summary of the note
     //   - keywords: list of strings (required) - Extracted keywords
     //   - questions: string (required) - JSON stringified questions
-    //   - imageUrl: string (optional) - URL of the image
     //   - timestamp: number (required, immutable) - Time of analysis
     //
     // ===============================================================
@@ -41,13 +40,12 @@ service cloud.firestore {
     
     function isValidHistoryItem(data, userId) {
       return hasRequiredFields(['userId', 'topicDetected', 'summary', 'keywords', 'questions', 'timestamp']) &&
-             hasOnlyAllowedFields(['userId', 'topicDetected', 'summary', 'keywords', 'questions', 'imageUrl', 'timestamp']) &&
+             hasOnlyAllowedFields(['userId', 'topicDetected', 'summary', 'keywords', 'questions', 'timestamp']) &&
              data.userId == userId &&
              data.topicDetected is string && data.topicDetected.size() > 0 && data.topicDetected.size() < 500 &&
              data.summary is string && data.summary.size() > 0 && data.summary.size() < 5000 &&
              data.keywords is list && data.keywords.size() <= 50 &&
              data.questions is string && data.questions.size() < 1000000 &&
-             (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() < 2000000)) &&
              data.timestamp is number;
     }
 
@@ -58,7 +56,7 @@ service cloud.firestore {
       allow delete: if isOwner(userId);
     }
 
-    match /users/{userId}/profile {
+    match /users/{userId}/profile/data {
       allow read: if isOwner(userId);
       allow write: if isOwner(userId); // Simplified for prototype: user can update their own premium status
     }

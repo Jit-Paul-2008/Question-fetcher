@@ -28,10 +28,6 @@
           "type": "string",
           "description": "JSON stringified array of generated questions."
         },
-        "imageUrl": {
-          "type": "string",
-          "description": "URL of the uploaded image (stored in Firebase Storage or base64 if small)."
-        },
         "timestamp": {
           "type": "number",
           "description": "Timestamp of when the analysis was performed."

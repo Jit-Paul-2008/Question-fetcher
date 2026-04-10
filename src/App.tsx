@@ -34,8 +34,6 @@ import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, g
 
 interface HistoryItem extends ScanResult {
   id?: string;
-  image?: string;
-  imageUrl?: string;
   timestamp: number;
 }
 
@@ -53,6 +51,8 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isPremium, setIsPremium] = useState(false);
+  const [scanCount, setScanCount] = useState(0);
+  const FREE_SCAN_LIMIT = 3;
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [image, setImage] = useState<string | null>(null);
   const [topic, setTopic] = useState("");
@@ -81,10 +81,12 @@ export default function App() {
           window.history.replaceState({}, document.title, window.location.pathname);
         }
 
-        // Fetch premium status
+        // Fetch premium status and scan count
         const profileDoc = await getDoc(doc(db, `users/${currentUser.uid}/profile`, 'data'));
-        if (profileDoc.exists() && profileDoc.data().isPremium) {
-          setIsPremium(true);
+        if (profileDoc.exists()) {
+          const data = profileDoc.data();
+          if (data.isPremium) setIsPremium(true);
+          if (typeof data.scanCount === 'number') setScanCount(data.scanCount);
         }
       } else {
         setIsPremium(false);
@@ -113,7 +115,6 @@ export default function App() {
           summary: data.summary,
           keywords: data.keywords,
           questions: JSON.parse(data.questions),
-          imageUrl: data.imageUrl,
           timestamp: data.timestamp,
         } as HistoryItem;
       });
@@ -180,6 +181,11 @@ export default function App() {
       return;
     }
 
+    if (!isPremium && scanCount >= FREE_SCAN_LIMIT) {
+      toast.error(`Free limit reached (${FREE_SCAN_LIMIT} scans). Upgrade to Premium for unlimited scans.`);
+      return;
+    }
+
     setIsScanning(true);
     try {
       const scanResult = await scanChemistryNote(image, topic, selectedExams);
@@ -193,7 +199,6 @@ export default function App() {
             summary: scanResult.summary,
             keywords: scanResult.keywords,
             questions: JSON.stringify(scanResult.questions),
-            imageUrl: image, // Note: Storing base64 directly, ensure it's < 1MB or use Storage
             timestamp: Date.now()
           });
         } catch (dbError) {
@@ -201,11 +206,18 @@ export default function App() {
           toast.error("Analysis complete, but failed to save to history.");
         }
       } else {
-        // Fallback to local state if not logged in (though we'll require login)
-        setHistory(prev => [{ ...scanResult, image, timestamp: Date.now() }, ...prev]);
+        // Fallback to local state if not logged in
+        setHistory(prev => [{ ...scanResult, timestamp: Date.now() }, ...prev]);
       }
 
       toast.success("Scan completed successfully!");
+        
+      // Increment scan count for free users
+      if (!isPremium && user) {
+        const newCount = scanCount + 1;
+        setScanCount(newCount);
+        await setDoc(doc(db, `users/${user.uid}/profile`, 'data'), { scanCount: newCount }, { merge: true });
+      }
     } catch (error) {
       console.error(error);
       toast.error("Failed to scan image. Please try again.");
@@ -360,7 +372,7 @@ export default function App() {
 
                 <Button 
                   onClick={startScan}
-                  disabled={isScanning || !image}
+                  disabled={isScanning || !image || (!isPremium && scanCount >= FREE_SCAN_LIMIT)}
                   className="w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-all shadow-lg shadow-blue-200 disabled:opacity-50"
                 >
                   {isScanning ? (
@@ -368,10 +380,15 @@ export default function App() {
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                       Analyzing Note...
                     </>
+                  ) : (!isPremium && scanCount >= FREE_SCAN_LIMIT) ? (
+                    <>
+                      <Crown className="w-4 h-4 mr-2" />
+                      Upgrade to Scan More
+                    </>
                   ) : (
                     <>
                       <Search className="w-4 h-4 mr-2" />
-                      Scan & Generate
+                      Scan & Generate {!isPremium && `(${FREE_SCAN_LIMIT - scanCount} left)`}
                     </>
                   )}
                 </Button>
@@ -507,7 +524,9 @@ export default function App() {
                 <details key={i} className="group bg-white rounded-2xl border border-gray-100 shadow-sm">
                   <summary className="p-6 cursor-pointer list-none flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                      <img src={item.imageUrl || item.image} alt="Note" className="w-12 h-12 rounded-lg object-cover" referrerPolicy="no-referrer" />
+                      <div className="w-12 h-12 rounded-lg bg-gray-50 flex items-center justify-center">
+                        <FileText className="w-6 h-6 text-gray-400" />
+                      </div>
                       <div>
                         <h3 className="font-bold">{item.topicDetected}</h3>
                         <p className="text-xs text-gray-500">{new Date(item.timestamp).toLocaleString()}</p>

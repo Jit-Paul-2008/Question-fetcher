@@ -1,9 +1,0 @@
-import React from 'react';
-
-export default function App() {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#f0f0f0' }}>
-      <h1 style={{ color: '#333' }}>ChemScan is loading...</h1>
-    </div>
-  );
-}
