@@ -97,7 +97,33 @@ async function startServer() {
 
   app.get("/api/health", (req, res) => res.json({ status: "ok" }));
 
-  // ─── RAZORPAY: Create Order ───────────────────────────────────────────────
+  // ─── Domain Mapping for Targeted Searching ──────────────────────────────────
+const EXAM_DOMAINS: Record<string, string[]> = {
+  jee: ["mathongo.com", "esaral.com", "vedantu.com", "toppr.com", "careers360.com", "allen.ac.in", "pw.live"],
+  neet: ["aakash.ac.in", "doubtnut.com", "vedantu.com", "toppr.com", "careers360.com", "pw.live"],
+  boards: ["learncbse.in", "selfstudys.com", "shaalaa.com", "byjus.com", "ncert.nic.in", "aglasem.com", "collegedekho.com", "pw.live"],
+  default: ["byjus.com", "toppr.com", "vedantu.com", "shaalaa.com", "careers360.com", "selfstudys.com", "pw.live"]
+};
+
+function getIncludeDomains(exams: string[]): string[] {
+  const domains = new Set<string>();
+  if (!exams || exams.length === 0) return EXAM_DOMAINS.default;
+
+  exams.forEach(exam => {
+    const e = exam.toLowerCase();
+    if (e.includes("jee")) {
+      EXAM_DOMAINS.jee.forEach(d => domains.add(d));
+    } else if (e.includes("neet")) {
+      EXAM_DOMAINS.neet.forEach(d => domains.add(d));
+    } else if (e.includes("cbse") || e.includes("icse") || e.includes("isc") || e.includes("wbsche") || e.includes("board")) {
+      EXAM_DOMAINS.boards.forEach(d => domains.add(d));
+    }
+  });
+
+  return domains.size > 0 ? Array.from(domains) : EXAM_DOMAINS.default;
+}
+
+// ─── Razorpay: Create Order ───────────────────────────────────────────────
   app.post("/api/create-order", async (req, res) => {
     try {
       const { packId } = req.body;
@@ -304,10 +330,15 @@ async function startServer() {
       // ── STEP 2: Always exactly 3 Tavily searches — fixed cost ──
       const rawQueries = (analysis.searchQueries || []).slice(0, 3);
       const queries = rawQueries.filter((q: string) => q && q.trim().length > 0);
+      const includeDomains = getIncludeDomains(examList);
 
       const allSearchResults = await Promise.all(
         queries.map((q: string) =>
-          tv.search(q, { searchDepth: "advanced", maxResults: 7 })
+          tv.search(q, { 
+            searchDepth: "advanced", 
+            maxResults: 10, // Increased results because domains are now high-quality
+            includeDomains: includeDomains 
+          })
             .catch(err => { console.error(`Tavily failed: ${q}`, err.message); return { results: [] }; })
         )
       );
@@ -318,7 +349,10 @@ async function startServer() {
         for (const r of (sr.results || [])) {
           if (!seenUrls.has(r.url)) {
             seenUrls.add(r.url);
-            combined.push(`[Source: ${r.url}]\n${r.content}`);
+            // Trim content to 800 chars — questions appear in the first few hundred
+            // chars; sending full pages wastes tokens and triggers quota limits.
+            const snippet = (r.content || "").slice(0, 800).trim();
+            if (snippet) combined.push(`[Source: ${r.url}]\n${snippet}`);
           }
         }
       }
@@ -338,7 +372,7 @@ async function startServer() {
         "- **Detailed Source Instruction**: Specify where the question is from in detail (e.g., 'PYQ 2023 JEE Mains', 'NEET 2021', 'CBSE Board 2020').",
         "- **NO LINKS**: Do NOT include any URLs or web links in the source field. Use only text describing the source.",
         "- **NO REPETITION**: Do not provide duplicate questions. Each question must be unique in content and phrasing.",
-        `- Aim for 10-20 valid questions. Stay within ${subjectLabel}: "${analysis.topicDetected}".`,
+        `- Aim for 20-30 high-quality, unique questions. Stay within ${subjectLabel}: "${analysis.topicDetected}".`,
         "",
         combined.length > 0 ? `Search Results:\n${combined.join("\n---\n")}` : "No search results available. Proceed with expert generation.",
       ].join("\n");

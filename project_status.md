@@ -11,6 +11,7 @@
 - **Multimodal Support**: Analyzes images and PDFs (via OCR/Vision) to detect core topics and keywords.
 - **Dynamic Search Query Generation**: Automatically generates and executes targeted web searches via **Tavily** to ground question data in real-world facts.
 - **Expert Question Synthesis**: Mimics high-level human expert reasoning to structure questions with options, correct answers, and subject classifications.
+- **Targeted Authority Searching**: (New) Search is restricted to high-quality educational domains (e.g., MathonGo, Allen, Vedantu, BYJU'S) to ensure factual accuracy and high question density.
 
 ### 🛡️ Resilient Architecture
 - **Exponential Backoff**: Automatically handles temporary API spikes (503 errors) with smart retries on the cost-optimal model.
@@ -44,14 +45,15 @@ Estimates are based on average April 2026 pricing and typical token usage for on
 
 | Component | Usage (Avg) | Cost (Flash Only) |
 | :--- | :--- | :--- |
-| **Tavily Search** | 3 Queries | $0.015 |
+| **Tavily Search** | 3 Queries (Filtered) | $0.015 |
 | **Step 1: Vision** | 2.5k Tokens | $0.002 |
-| **Step 3: Structuring** | 20k Tokens | $0.017 |
-| **TOTAL** | — | **~$0.034 / query** |
+| **Step 3: Structuring** | 22k Tokens | $0.018 |
+| **TOTAL** | — | **~$0.035 / query** |
 
 > [!NOTE]
 > **Production Context**: 
-> - 1,000 queries on the **Flash** path cost approximately **$34.00**.
+> - 1,000 queries cost approximately **$35.00**.
+> - Yield has increased from **15 to ~30 questions** per query thanks to Targeted Authority Searching, effectively doubling the value per token.
 
 ---
 
