@@ -11,6 +11,8 @@ import admin from "firebase-admin";
 import { getFirestore } from "firebase-admin/firestore";
 import Razorpay from "razorpay";
 import mammoth from "mammoth";
+import { Pinecone } from "@pinecone-database/pinecone";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // ─── Firebase Admin ───────────────────────────────────────────────────────────
 if (admin.apps.length === 0) {
@@ -34,6 +36,27 @@ type PackId = keyof typeof CREDIT_PACKS;
 const FREE_WELCOME_CREDITS = 3;
 
 // ─── Razorpay client ──────────────────────────────────────────────────────────
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID || "",
+  key_secret: process.env.RAZORPAY_KEY_SECRET || "",
+});
+
+// ─── Pinecone & Embedding Init ──────────────────────────────────────────────
+const pc = new Pinecone({ apiKey: process.env.PINECONE_API_KEY || "" });
+const pcIndex = pc.index("chemscan");
+const genAIEmbed = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+const embedModel = genAIEmbed.getGenerativeModel({ model: "text-embedding-004" });
+
+async function getTopicEmbedding(text: string) {
+  try {
+    const result = await embedModel.embedContent(text);
+    return result.embedding.values;
+  } catch (err) {
+    console.error("[Embedding:Error]", err);
+    return null;
+  }
+}
+
 function getRazorpay() {
   const keyId = process.env.RAZORPAY_KEY_ID;
   const keySecret = process.env.RAZORPAY_KEY_SECRET;
@@ -430,27 +453,50 @@ async function startServer() {
       const subjectLabel = subject || "Chemistry";
 
 
-      // ─── RAG CACHE CHECK (Only for Topic-Only scans) ──────────────────────
+      // ─── SEMANTIC CACHE CHECK (Hybrid Pinecone + Firestore) ──────────────
       let cachedData: any = null;
       const isTopicOnly = imageList.length === 0;
       const cacheKey = getCacheKey(subjectLabel, topic || "", examList);
 
       if (isTopicOnly) {
+        // 1. Try Exact Match First (Fastest/Cheapest)
         const cacheRef = db.collection("global_cache").doc(cacheKey);
         const cacheDoc = await cacheRef.get();
         if (cacheDoc.exists) {
-          const data = cacheDoc.data()!;
-          const age = Date.now() - (data.timestamp?.toMillis() || 0);
+          console.log(`[Cache:EXACT_HIT] key=${cacheKey}`);
+          cachedData = cacheDoc.data();
+        } else {
+          // 2. Try Semantic Match (Pinecone)
+          console.log(`[Cache:SEMANTIC_PULL] topic="${topic}"`);
+          const vector = await getTopicEmbedding(topic || "");
+          if (vector) {
+            const queryResponse = await pcIndex.query({
+              vector,
+              topK: 1,
+              includeMetadata: true,
+            });
+
+            const bestMatch = queryResponse.matches[0];
+            if (bestMatch && bestMatch.score && bestMatch.score > 0.88) {
+              const semanticDoc = await db.collection("global_cache").doc(bestMatch.id).get();
+              if (semanticDoc.exists) {
+                console.log(`[Cache:SEMANTIC_HIT] score=${bestMatch.score.toFixed(3)} topicDetected="${bestMatch.metadata?.topicDetected}"`);
+                cachedData = semanticDoc.data();
+              }
+            }
+          }
+        }
+
+        if (cachedData) {
+          const age = Date.now() - (cachedData.timestamp?.toMillis() || 0);
           const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
-          
           if (age < SEVEN_DAYS) {
-            console.log(`[Cache:HIT] key=${cacheKey} topic="${topic}"`);
             return res.json({
-              topicDetected: data.topicDetected,
-              summary: data.summary,
-              keywords: data.keywords || [],
-              questions: data.questions || [],
-              isPopular: true // UI badge flag
+              topicDetected: cachedData.topicDetected,
+              summary: cachedData.summary,
+              keywords: cachedData.keywords || [],
+              questions: cachedData.questions || [],
+              isPopular: true
             });
           }
         }
@@ -711,8 +757,9 @@ async function startServer() {
         questions: structured.questions || [],
       });
 
-      // ─── SAVE TO CACHE (Only for Topic-Only scans) ────────────────────────
+      // ─── SAVE TO CACHE (Hybrid Firestore + Pinecone) ─────────────────────
       if (isTopicOnly && structured.questions?.length > 0) {
+        // Save full scan to Firestore
         db.collection("global_cache").doc(cacheKey).set({
           topicDetected: analysis.topicDetected || topic,
           summary: analysis.summary,
@@ -721,7 +768,23 @@ async function startServer() {
           subject: subjectLabel,
           exams: examList,
           timestamp: admin.firestore.FieldValue.serverTimestamp()
-        }).catch(err => console.error("[Cache:SaveError]", err));
+        }).catch(err => console.error("[Cache:SaveError:Firestore]", err));
+
+        // Save metadata & vector to Pinecone for future semantic searches
+        (async () => {
+           const vector = await getTopicEmbedding(analysis.topicDetected || topic);
+           if (vector) {
+             await pcIndex.upsert([{
+               id: cacheKey,
+               values: vector,
+               metadata: { 
+                 topicDetected: analysis.topicDetected || topic,
+                 subject: subjectLabel 
+               }
+             }]);
+             console.log(`[Cache:SAVE:Vector] key=${cacheKey}`);
+           }
+        })().catch(err => console.error("[Cache:SaveError:Pinecone]", err));
       }
 
     } catch (error: any) {

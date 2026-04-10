@@ -18,6 +18,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 import { scanSubjectNote, ScanResult } from "@/src/lib/gemini";
 import { generateQuestionsPDF } from "@/src/lib/pdf";
+import GraphView from "./GraphView";
 import { generateQuestionsDocx } from "@/src/lib/docx";
 import { auth, db, signInWithGoogle, logOut } from "@/src/lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
@@ -84,7 +85,7 @@ export default function App() {
   const [isBuying, setIsBuying] = useState<string | null>(null);
   const [razorpayKeyId, setRazorpayKeyId] = useState("");
   const [creditPacks, setCreditPacks] = useState<Record<string, CreditPack>>({});
-  const [activeTab, setActiveTab] = useState<"generator" | "library" | "classrooms">("generator");
+  const [activeTab, setActiveTab] = useState<"generator" | "library" | "classrooms" | "map">("generator");
   const [libraryBanks, setLibraryBanks] = useState<any[]>([]);
   const [isLibraryLoading, setIsLibraryLoading] = useState(false);
   const [classroomCode, setClassroomCode] = useState("");
