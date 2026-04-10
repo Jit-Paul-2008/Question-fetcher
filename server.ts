@@ -720,16 +720,16 @@ async function startServer() {
                   items: {
                     type: Type.OBJECT,
                     properties: {
-                      question: { type: Type.STRING },
+                      text: { type: Type.STRING },
                       options: { type: Type.ARRAY, items: { type: Type.STRING } },
-                      correctAnswer: { type: Type.STRING },
+                      answer: { type: Type.STRING },
                       source: { type: Type.STRING },
                       year: { type: Type.STRING },
-                      difficulty: { type: Type.STRING },
+                      type: { type: Type.STRING },
                       targetExam: { type: Type.STRING },
                       topic: { type: Type.STRING },
                     },
-                    required: ["question", "options", "correctAnswer", "source", "year", "difficulty", "targetExam", "topic"],
+                    required: ["text", "options", "answer", "source", "year", "type", "targetExam", "topic"],
                   },
                 },
               },
@@ -760,7 +760,7 @@ async function startServer() {
               q.source = q.source.replace(/https?:\/\/[^\s]+/g, "").trim();
               if (!q.source) q.source = "Standard Practice Question";
             }
-            const normalizedText = (q.text || "").toLowerCase().replace(/\s+/g, " ").trim();
+            const normalizedText = (q.text || q.question || "").toLowerCase().replace(/\s+/g, " ").trim();
             if (!normalizedText || uniqueTexts.has(normalizedText)) return false;
             uniqueTexts.add(normalizedText);
             return true;

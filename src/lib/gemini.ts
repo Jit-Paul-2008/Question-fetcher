@@ -5,6 +5,7 @@ export interface Question {
   source: string;
   year: string;
   type: "PYQ" | "Sample Paper" | "HOTS" | "Practice";
+  targetExam?: string;
   topic: string;
 }
 

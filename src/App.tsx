@@ -463,16 +463,16 @@ export default function App() {
                             <div className="p-8 bg-claude-ivory rounded-claude-2xl border border-claude-border-cream relative shadow-sm min-h-[350px]">
                               <div className="flex justify-between items-start mb-8">
                                 <span className="px-4 py-1 bg-claude-terracotta text-white text-[10px] font-bold rounded-full uppercase tracking-widest">Question {currentQuestionIdx + 1} of {result.questions.length}</span>
-                                <Badge variant="outline" className="uppercase tracking-widest text-[9px] font-bold">{result.questions[currentQuestionIdx].difficulty}</Badge>
+                                <Badge variant="outline" className="uppercase tracking-widest text-[9px] font-bold">{result.questions[currentQuestionIdx].type || result.questions[currentQuestionIdx].difficulty}</Badge>
                               </div>
 
                               <p className="text-2xl font-medium mb-10 leading-relaxed text-claude-near-black">
-                                {result.questions[currentQuestionIdx].question}
+                                {result.questions[currentQuestionIdx].text || result.questions[currentQuestionIdx].question}
                               </p>
 
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {result.questions[currentQuestionIdx].options.map((opt, j) => (
-                                  <div key={j} className={`p-5 rounded-claude-xl border flex items-center gap-4 text-sm transition-all ${opt === result.questions[currentQuestionIdx].correctAnswer ? "bg-green-50/50 border-green-200 text-green-800 ring-1 ring-green-100" : "bg-white border-claude-border-cream shadow-sm"}`}>
+                                  <div key={j} className={`p-5 rounded-claude-xl border flex items-center gap-4 text-sm transition-all ${opt === (result.questions[currentQuestionIdx].answer || result.questions[currentQuestionIdx].correctAnswer) ? "bg-green-50/50 border-green-200 text-green-800 ring-1 ring-green-100" : "bg-white border-claude-border-cream shadow-sm"}`}>
                                     <div className="w-8 h-8 rounded-full bg-claude-parchment flex items-center justify-center font-bold text-[11px] shadow-sm">{String.fromCharCode(65 + j)}</div>
                                     <span className="font-serif leading-snug">{opt}</span>
                                   </div>
