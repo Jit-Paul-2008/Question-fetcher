@@ -9,10 +9,13 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { tavily } from "@tavily/core";
 import admin from "firebase-admin";
 import Razorpay from "razorpay";
+import mammoth from "mammoth";
 
 // ─── Firebase Admin ───────────────────────────────────────────────────────────
 if (admin.apps.length === 0) {
-  admin.initializeApp();
+  admin.initializeApp({
+    projectId: process.env.GCLOUD_PROJECT || "gen-lang-client-0312116426",
+  });
 }
 const db = admin.firestore();
 
@@ -21,9 +24,9 @@ const __dirname = path.dirname(__filename);
 
 // ─── Credit Packs (source of truth — shared with /api/config) ────────────────
 const CREDIT_PACKS = {
-  starter: { credits: 5,  amount: 4900,  name: "Starter Pack",  display: "₹49"  },
-  value:   { credits: 15, amount: 12900, name: "Value Pack",    display: "₹129" },
-  study:   { credits: 35, amount: 27900, name: "Study Pack",    display: "₹279" },
+  starter: { credits: 5, amount: 4900, name: "Starter Pack", display: "₹49" },
+  value: { credits: 15, amount: 12900, name: "Value Pack", display: "₹129" },
+  study: { credits: 35, amount: 27900, name: "Study Pack", display: "₹279" },
 } as const;
 type PackId = keyof typeof CREDIT_PACKS;
 
@@ -197,31 +200,47 @@ async function startServer() {
       const allExams = examLabels.join(" ");
       const subjectLabel = subject || "Chemistry";
 
-      const imageParts = imageList.map((img: string) => ({
-        inlineData: {
-          mimeType: img.startsWith("data:image/png") ? "image/png" : "image/jpeg",
-          data: img.split(",")[1],
-        },
-      }));
+      const contentParts: any[] = [];
+      const docxTexts: string[] = [];
+
+      for (const item of imageList) {
+        if (!item || typeof item !== "string") continue;
+        const [meta, base64Data] = item.split(",");
+        if (!base64Data) continue;
+        const mimeType = (meta.match(/data:(.*?);/) || [])[1] || "image/jpeg";
+
+        if (mimeType.includes("image") || mimeType === "application/pdf") {
+          contentParts.push({ inlineData: { mimeType, data: base64Data } });
+        } else if (mimeType.includes("officedocument") || mimeType.includes("word") || item.includes(".docx")) {
+          try {
+            const buffer = Buffer.from(base64Data, "base64");
+            const result = await mammoth.extractRawText({ buffer });
+            docxTexts.push(result.value);
+          } catch (err) {
+            console.error("DOCX extraction error:", err);
+          }
+        }
+      }
 
       const analysisPrompt = [
-        `You are analyzing ${subjectLabel} notes for a student preparing for: ${examLabels.join(", ")}.`,
-        `Subject: ${subjectLabel}. Topic hint from user: "${topic}". Pages uploaded: ${imageList.length}.`,
+        `You are analyzing ${subjectLabel} documents/images for a student preparing for: ${examLabels.join(", ")}.`,
+        `Subject: ${subjectLabel}. Topic: "${topic}". Files uploaded: ${imageList.length}.`,
         "",
+        docxTexts.length > 0 ? `Additional text content from DOCX files:\n${docxTexts.join("\n\n")}\n` : "",
         "STEP 1 — Extract and DEDUPLICATE topics:",
-        `Look at ALL images together as one set of notes. List every unique sub-topic, concept, formula, and diagram across ALL pages. Deduplicate — if the same concept appears multiple times, count it ONCE. Stay strictly within the subject: ${subjectLabel}.`,
+        `Look at ALL uploaded content (images, PDFs, text) together as a single set of studies. List every unique sub-topic, formula, and diagram. Stay strictly within the subject: ${subjectLabel}.`,
         "",
-        "STEP 2 — Generate EXACTLY 3 search queries:",
-        "Each query must cover ALL detected topics together in a single search string (use OR to combine topics).",
-        "Generate EXACTLY 3 queries for these 3 angles. Do NOT generate one query per topic.",
-        `Query 1: (topic1 OR topic2 OR ...) ${subjectLabel} ${primaryExam} PYQ past year questions solutions`,
-        `Query 2: (topic1 OR topic2 OR ...) ${subjectLabel} ${primaryExam} sample paper MCQ`,
-        `Query 3: (topic1 OR topic2 OR ...) ${subjectLabel} HOTS important questions ${allExams}`,
+        "STEP 2 — Generate EXACTLY 3 diverse search queries:",
+        "Distribute the detected topics across the 3 queries so each query is specific and targeted.",
+        "Do NOT dump all topics into a single query — that dilutes results.",
+        `Query 1: Focus on the TOP 1-2 most important topics. Format: (mainTopic1 OR mainTopic2) ${subjectLabel} ${primaryExam} PYQ past year questions with solutions`,
+        `Query 2: Focus on the NEXT 1-2 topics. Format: (nextTopic1 OR nextTopic2) ${subjectLabel} ${primaryExam} sample paper MCQ questions`,
+        `Query 3: Cover remaining topics + HOTS. Format: (remainingTopic1 OR remainingTopic2) ${subjectLabel} HOTS important questions ${allExams}`,
       ].join("\n");
 
       const analysisResponse = await ai.models.generateContent({
         model: "gemini-2.0-flash",
-        contents: { parts: [...imageParts, { text: analysisPrompt }] },
+        contents: { parts: [...contentParts, { text: analysisPrompt }] },
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -241,10 +260,12 @@ async function startServer() {
       console.log(`[Scan] uid=${uid} subject=${subjectLabel} topic=${analysis.topicDetected} queries=${analysis.searchQueries?.length}`);
 
       // ── STEP 2: Always exactly 3 Tavily searches — fixed cost ──
-      const queries = (analysis.searchQueries || []).slice(0, 3);
+      const rawQueries = (analysis.searchQueries || []).slice(0, 3);
+      const queries = rawQueries.filter((q: string) => q && q.trim().length > 0);
+
       const allSearchResults = await Promise.all(
         queries.map((q: string) =>
-          tv.search(q, { searchDepth: "basic", maxResults: 5 })
+          tv.search(q, { searchDepth: "advanced", maxResults: 7 })
             .catch(err => { console.error(`Tavily failed: ${q}`, err.message); return { results: [] }; })
         )
       );
@@ -275,7 +296,7 @@ async function startServer() {
         "- If a question lacks options, create plausible options grounded in the content.",
         "- Categorize as: PYQ, Sample Paper, HOTS, or Practice",
         "- Include source URL and year if mentioned.",
-        `- Extract as many valid questions as possible (aim for 8–15). Stay within ${subjectLabel}: "${analysis.topicDetected}".`,
+        `- Extract as many valid questions as possible (aim for 15–25). Stay within ${subjectLabel}: "${analysis.topicDetected}".`,
         "",
         `Search Results:\n${combined.join("\n---\n")}`,
       ].join("\n");
@@ -324,7 +345,7 @@ async function startServer() {
       if (uid) {
         await db.doc(`users/${uid}/profile/data`)
           .update({ credits: admin.firestore.FieldValue.increment(1) })
-          .catch(() => {}); // best-effort refund
+          .catch(() => { }); // best-effort refund
       }
       console.error("Scan error:", error);
       res.status(500).json({ error: error.message });

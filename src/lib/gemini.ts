@@ -15,7 +15,7 @@ export interface ScanResult {
   questions: Question[];
 }
 
-export async function scanChemistryNote(
+export async function scanSubjectNote(
   images: string[],
   userTopic: string,
   subject: string,

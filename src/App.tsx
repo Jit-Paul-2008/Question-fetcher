@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   Upload, Search, FileText, Download, CheckCircle2,
   Loader2, Camera, X, ChevronRight, BookOpen, Layers,
-  LogOut, Coins, ShoppingCart, FlaskConical,
+  LogOut, Coins, ShoppingCart, FlaskConical, FileBox,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
-import { scanChemistryNote, ScanResult } from "@/src/lib/gemini";
+import { scanSubjectNote, ScanResult } from "@/src/lib/gemini";
 import { generateQuestionsPDF } from "@/src/lib/pdf";
 import { generateQuestionsDocx } from "@/src/lib/docx";
 import { auth, db, signInWithGoogle, logOut } from "@/src/lib/firebase";
@@ -149,13 +149,13 @@ export default function App() {
     return () => unsub();
   }, [user, isAuthReady]);
 
-  // ─── Image upload ─────────────────────────────────────────────────────────
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // ─── File upload (Images, PDF, DOCX) ─────────────────────────────────────
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
     const remaining = MAX_IMAGES - images.length;
     if (remaining <= 0) {
-      toast.error(`Maximum ${MAX_IMAGES} pages per scan.`);
+      toast.error(`Maximum ${MAX_IMAGES} files per scan.`);
       return;
     }
     Array.from(files).slice(0, remaining).forEach((file: File) => {
@@ -164,7 +164,7 @@ export default function App() {
       reader.readAsDataURL(file);
     });
     if (files.length > remaining) {
-      toast.warning(`Only ${remaining} more page(s) added. Maximum is ${MAX_IMAGES}.`);
+      toast.warning(`Only ${remaining} more file(s) added. Maximum is ${MAX_IMAGES}.`);
     }
     e.target.value = "";
   };
@@ -187,7 +187,7 @@ export default function App() {
     setIsScanning(true);
     try {
       const idToken = await user!.getIdToken();
-      const scanResult = await scanChemistryNote(images, topic, subject, selectedExams, idToken);
+      const scanResult = await scanSubjectNote(images, topic, subject, selectedExams, idToken);
 
       // Credit was deducted server-side atomically — update local UI
       setCredits(prev => Math.max(0, prev - 1));
@@ -374,21 +374,33 @@ export default function App() {
                 >
                   {images.length > 0 ? (
                     <div className="w-full space-y-3">
-                      <div className="flex flex-wrap gap-2 justify-center">
-                        {images.map((img, idx) => (
-                          <div key={idx} className="relative group">
-                            <img src={img} alt={`Page ${idx + 1}`} className="w-16 h-16 object-cover rounded-lg border border-gray-200" />
-                            <button
-                              onClick={(e) => { e.stopPropagation(); removeImage(idx); }}
-                              className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
-                          </div>
-                        ))}
+                       <div className="flex flex-wrap gap-2 justify-center">
+                        {images.map((fileData, idx) => {
+                          const isImage = fileData.startsWith("data:image/");
+                          const isPDF = fileData.startsWith("data:application/pdf");
+                          
+                          return (
+                            <div key={idx} className="relative group">
+                              {isImage ? (
+                                <img src={fileData} alt={`File ${idx + 1}`} className="w-16 h-16 object-cover rounded-lg border border-gray-200" />
+                              ) : (
+                                <div className={`w-16 h-16 flex flex-col items-center justify-center rounded-lg border border-gray-200 ${isPDF ? "bg-red-50" : "bg-blue-50"}`}>
+                                  {isPDF ? <FileText className="w-8 h-8 text-red-500" /> : <FileBox className="w-8 h-8 text-blue-500" />}
+                                  <span className="text-[8px] font-bold mt-1 uppercase text-gray-500">{isPDF ? "PDF" : "DOCX"}</span>
+                                </div>
+                              )}
+                              <button
+                                onClick={(e) => { e.stopPropagation(); removeImage(idx); }}
+                                className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          );
+                        })}
                       </div>
                       <p className="text-xs text-center text-blue-600 font-medium">
-                        {images.length}/{MAX_IMAGES} pages — click to add more
+                        {images.length}/{MAX_IMAGES} files — click to add more
                       </p>
                     </div>
                   ) : (
@@ -397,12 +409,12 @@ export default function App() {
                         <Upload className="w-6 h-6 text-gray-400" />
                       </div>
                       <p className="text-sm font-medium text-gray-600">Click to upload or drag & drop</p>
-                      <p className="text-xs text-gray-400 mt-1">JPG, PNG or WEBP — select multiple pages at once</p>
+                      <p className="text-xs text-gray-400 mt-1">Images, PDF or DOCX — select multiple files at once</p>
                     </>
                   )}
                   <input
-                    type="file" ref={fileInputRef} onChange={handleImageUpload}
-                    className="hidden" accept="image/*" multiple
+                    type="file" ref={fileInputRef} onChange={handleFileUpload}
+                    className="hidden" accept="image/*,.pdf,.docx" multiple
                   />
                 </div>
 
