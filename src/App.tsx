@@ -185,21 +185,21 @@ export default function App() {
 
   // ─── Scan ─────────────────────────────────────────────────────────────────
   const startScan = async () => {
-    if (scanMode === "notes" && images.length === 0) { 
-      toast.error("Please upload at least one image or document."); 
-      return; 
+    if (scanMode === "notes" && images.length === 0) {
+      toast.error("Please upload at least one image or document.");
+      return;
     }
-    if (!topic || topic.trim() === "") { 
-      toast.error("Please enter at least one topic."); 
-      return; 
+    if (!topic || topic.trim() === "") {
+      toast.error("Please enter at least one topic.");
+      return;
     }
     if (topicsCount > MAX_TOPICS) {
       toast.error(`Please limit your scan to ${MAX_TOPICS} topics at a time.`);
       return;
     }
-    if (selectedExams.length === 0) { 
-      toast.error("Please select at least one target exam."); 
-      return; 
+    if (selectedExams.length === 0) {
+      toast.error("Please select at least one target exam.");
+      return;
     }
     if (credits <= 0) { setShowBuyModal(true); return; }
 
@@ -317,16 +317,17 @@ export default function App() {
   // ─── Render: Sign In ─────────────────────────────────────────────────────
   if (!user) {
     return (
-      <div className="min-h-screen bg-[#F5F5F7] flex flex-col items-center justify-center p-4">
-        <div className="w-20 h-20 rounded-3xl bg-blue-600 text-white flex items-center justify-center mb-8 shadow-xl shadow-blue-200">
+      <div className="min-h-screen bg-claude-parchment flex flex-col items-center justify-center p-4">
+        <div className="w-20 h-20 rounded-claude-3xl bg-claude-terracotta text-claude-ivory flex items-center justify-center mb-8 shadow-claude-whisper">
           <FlaskConical className="w-10 h-10" />
         </div>
-        <h1 className="text-4xl font-bold tracking-tight mb-2 text-center">ChemScan</h1>
-        <p className="text-base text-[#86868B] mb-1 text-center">AI-powered question bank generator</p>
-        <p className="text-sm text-blue-600 font-medium mb-8 text-center">Physics · Chemistry · Biology · Maths · and more</p>
+        <h1 className="text-5xl font-serif font-medium tracking-tight mb-2 text-center text-claude-near-black">ChemScan</h1>
+        <p className="text-lg text-claude-olive-gray mb-1 text-center font-sans">AI-powered question bank generator</p>
+        <p className="text-sm text-claude-terracotta font-medium mb-8 text-center uppercase tracking-widest">Physics · Chemistry · Biology · Maths</p>
         <Button
           onClick={() => signInWithGoogle().catch(console.error)}
-          className="h-12 px-8 rounded-xl bg-white text-gray-900 hover:bg-gray-50 border border-gray-200 shadow-sm font-semibold text-base"
+          variant="warm-sand"
+          className="h-14 px-10 rounded-claude-lg border border-claude-border-cream shadow-claude-ring font-semibold text-lg"
         >
           <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -342,64 +343,61 @@ export default function App() {
 
   // ─── Render: Main App ─────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-[#F5F5F7] text-[#1D1D1F] font-sans p-4 md:p-8">
+    <div className="min-h-screen bg-claude-parchment text-claude-near-black font-sans p-4 md:p-12">
       <div className="max-w-6xl mx-auto">
 
         {/* Header */}
-        <header className="mb-10 relative">
+        <header className="mb-16 relative text-center">
           <div className="absolute right-0 top-0 flex items-center gap-3">
             {/* Credit balance */}
             <button
               onClick={() => setShowBuyModal(true)}
-              className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold shadow-sm hover:bg-gray-50 transition-colors"
+              className="flex items-center gap-1.5 bg-claude-ivory border border-claude-border-cream rounded-claude-lg px-4 py-2 text-sm font-semibold shadow-claude-ring hover:bg-claude-warm-sand transition-colors"
             >
               <Coins className="w-4 h-4 text-amber-500" />
-              <span className={credits === 0 ? "text-red-500" : "text-gray-800"}>{credits} credits</span>
+              <span className={credits === 0 ? "text-claude-crimson" : "text-claude-near-black"}>{credits} credits</span>
             </button>
-            <div className="text-sm font-medium text-gray-600 hidden sm:block">{user.email}</div>
-            <Button variant="outline" size="sm" onClick={() => logOut()} className="rounded-xl">
+            <Button variant="ghost" size="sm" onClick={() => logOut()} className="rounded-claude-md text-claude-olive-gray hover:text-claude-near-black">
               <LogOut className="w-4 h-4 mr-2" />Sign Out
             </Button>
           </div>
-          <div className="text-center">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-blue-600 text-white mb-5 shadow-xl shadow-blue-200">
-              <FlaskConical className="w-7 h-7" />
-            </div>
-            <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-2">ChemScan</h1>
-            <p className="text-lg text-[#86868B]">
-              Upload your notes → get a real question bank from PYQs, Sample Papers & HOTS
-            </p>
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-claude-2xl bg-claude-terracotta text-claude-ivory mb-6 shadow-claude-whisper">
+            <FlaskConical className="w-8 h-8" />
           </div>
+          <h1 className="text-5xl md:text-6xl font-serif font-medium tracking-tight mb-4">ChemScan</h1>
+          <p className="text-xl text-claude-olive-gray max-w-2xl mx-auto leading-relaxed">
+            Upload your notes → get a real question bank from PYQs, Sample Papers & HOTS
+          </p>
         </header>
 
         {/* Main Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
 
           {/* Left: Upload Panel */}
-          <div className="lg:col-span-5 space-y-6">
-            <Card className="border-none shadow-2xl shadow-gray-200/50 bg-white/80 backdrop-blur-xl rounded-3xl overflow-hidden">
+          <div className="lg:col-span-5 space-y-8">
+            <Card className="border-none shadow-claude-whisper bg-claude-ivory rounded-claude-2xl overflow-hidden p-2">
               <CardHeader className="pb-4">
-                <div className="flex bg-gray-100 p-1 rounded-2xl mb-4">
+                <div className="flex bg-claude-parchment p-1 rounded-claude-xl mb-6">
                   <button
                     onClick={() => setScanMode("notes")}
-                    className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-[11px] font-bold transition-all ${scanMode === "notes" ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-claude-lg text-xs font-bold transition-all ${scanMode === "notes" ? "bg-white text-claude-terracotta shadow-sm" : "text-claude-stone-gray hover:text-claude-near-black"}`}
                   >
-                    <Upload className="w-3.5 h-3.5" />
+                    <Upload className="w-4 h-4" />
                     Scan Notes
                   </button>
                   <button
                     onClick={() => { setScanMode("topics"); setImages([]); }}
-                    className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-[11px] font-bold transition-all ${scanMode === "topics" ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-claude-lg text-xs font-bold transition-all ${scanMode === "topics" ? "bg-white text-claude-terracotta shadow-sm" : "text-claude-stone-gray hover:text-claude-near-black"}`}
                   >
-                    <Search className="w-3.5 h-3.5" />
+                    <Search className="w-4 h-4" />
                     Search Topics
                   </button>
                 </div>
-                <CardTitle className="flex items-center gap-2">
-                  {scanMode === "notes" ? <FileText className="w-5 h-5 text-blue-600" /> : <BookOpen className="w-5 h-5 text-blue-600" />}
+                <CardTitle className="flex items-center gap-3 text-2xl">
+                  {scanMode === "notes" ? <FileText className="w-6 h-6 text-claude-terracotta" /> : <BookOpen className="w-6 h-6 text-claude-terracotta" />}
                   {scanMode === "notes" ? "Upload Notes" : "Topic Search"}
                 </CardTitle>
-                <CardDescription>
+                <CardDescription className="text-claude-olive-gray">
                   {scanMode === "notes" ? `Extract questions from your images/PDFs` : `Find questions based on chapters only`}
                 </CardDescription>
               </CardHeader>
@@ -408,16 +406,16 @@ export default function App() {
                 {/* Image drop zone */}
                 <div
                   onClick={() => fileInputRef.current?.click()}
-                  className={`relative rounded-2xl border-2 border-dashed transition-all cursor-pointer flex flex-col items-center justify-center p-5 ${images.length > 0 ? "border-blue-400 bg-blue-50/30" : "border-gray-200 hover:border-blue-300 hover:bg-gray-50"
+                  className={`relative rounded-claude-xl border-2 border-dashed transition-all cursor-pointer flex flex-col items-center justify-center p-8 ${images.length > 0 ? "border-claude-terracotta bg-claude-parchment/50" : "border-claude-border-cream hover:border-claude-terracotta hover:bg-claude-parchment/30"
                     }`}
                 >
                   {images.length > 0 ? (
                     <div className="w-full space-y-3">
-                       <div className="flex flex-wrap gap-2 justify-center">
+                      <div className="flex flex-wrap gap-2 justify-center">
                         {images.map((fileData, idx) => {
                           const isImage = fileData.startsWith("data:image/");
                           const isPDF = fileData.startsWith("data:application/pdf");
-                          
+
                           return (
                             <div key={idx} className="relative group">
                               {isImage ? (
@@ -487,7 +485,7 @@ export default function App() {
                   </div>
                   <Input
                     id="topic"
-                    placeholder={scanMode === "notes" 
+                    placeholder={scanMode === "notes"
                       ? `e.g. ${subject === "Physics" ? "Electrostatics, Work Energy" : "Organic Chemistry"} ...`
                       : "Enter up to 5 topics separated by commas..."
                     }
@@ -523,14 +521,15 @@ export default function App() {
                 <Button
                   onClick={startScan}
                   disabled={isScanning || (scanMode === "notes" && images.length === 0) || topicsCount > MAX_TOPICS || !topic.trim()}
-                  className="w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-all shadow-lg shadow-blue-200 disabled:opacity-50"
+                  variant="terracotta"
+                  className="w-full h-14 rounded-claude-lg font-bold text-base transition-all shadow-claude-whisper disabled:opacity-50"
                 >
                   {isScanning ? (
-                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Analyzing...</>
+                    <><Loader2 className="w-5 h-5 mr-3 animate-spin" />Analyzing...</>
                   ) : credits <= 0 ? (
-                    <><ShoppingCart className="w-4 h-4 mr-2" />Buy Credits to Scan</>
+                    <><ShoppingCart className="w-5 h-5 mr-3" />Buy Credits to Scan</>
                   ) : (
-                    <><Search className="w-4 h-4 mr-2" />{scanMode === "notes" ? "Scan Notes & Generate" : "Search Topics & Generate"} ({credits} credit{credits !== 1 ? "s" : ""} left)</>
+                    <><Search className="w-5 h-5 mr-3" />{scanMode === "notes" ? "Generate Question Bank" : "Generate from Topics"}</>
                   )}
                 </Button>
 
@@ -544,88 +543,88 @@ export default function App() {
           {/* Right: Results Panel */}
           <div className="lg:col-span-7">
             {result ? (
-              <div className="space-y-6">
-                <Card className="border-none shadow-2xl shadow-gray-200/50 bg-white/80 backdrop-blur-xl rounded-3xl overflow-hidden">
+              <div className="space-y-8">
+                <Card className="border-none shadow-claude-whisper bg-claude-ivory rounded-claude-2xl overflow-hidden p-2">
                   <CardHeader className="pb-4">
                     <div className="flex items-center justify-between">
                       <div className="space-y-1">
-                        <CardTitle className="text-xl flex items-center gap-2">
-                          <CheckCircle2 className="w-5 h-5 text-green-500" />
+                        <CardTitle className="text-2xl flex items-center gap-2">
+                          <CheckCircle2 className="w-6 h-6 text-green-500" />
                           Question Bank Ready
                         </CardTitle>
-                        <CardDescription>
-                          <span className="font-bold text-blue-600">{subject}</span> · {result.topicDetected}
+                        <CardDescription className="text-claude-olive-gray">
+                          <span className="font-bold text-claude-terracotta">{subject}</span> · {result.topicDetected}
                         </CardDescription>
                       </div>
                       <div className="flex gap-2">
-                        <Button variant="outline" size="sm" className="rounded-xl border-gray-200"
+                        <Button variant="warm-sand" size="sm" className="rounded-claude-md"
                           onClick={() => generateQuestionsPDF(result.topicDetected, result.questions, subject)}>
                           <Download className="w-4 h-4 mr-2" />PDF
                         </Button>
-                        <Button variant="outline" size="sm" className="rounded-xl border-gray-200"
+                        <Button variant="warm-sand" size="sm" className="rounded-claude-md"
                           onClick={() => generateQuestionsDocx(result.topicDetected, result.questions, subject)}>
                           <FileText className="w-4 h-4 mr-2" />DOCX
                         </Button>
                       </div>
                     </div>
                   </CardHeader>
-                  <CardContent className="space-y-6">
-                    <div className="p-4 rounded-2xl bg-blue-50/50 border border-blue-100/50">
-                      <h4 className="text-sm font-bold text-blue-900 mb-2 flex items-center gap-2">
-                        <BookOpen className="w-4 h-4" />Summary
+                  <CardContent className="space-y-8">
+                    <div className="p-6 rounded-claude-xl bg-claude-parchment/60 border border-claude-border-cream">
+                      <h4 className="text-sm font-bold text-claude-near-black mb-2 flex items-center gap-2 uppercase tracking-widest">
+                        <BookOpen className="w-4 h-4 text-claude-terracotta" />Summary
                       </h4>
-                      <p className="text-sm text-blue-800/80 leading-relaxed">{result.summary}</p>
+                      <p className="text-base text-claude-olive-gray leading-relaxed font-serif">{result.summary}</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {result.keywords.map((kw, i) => (
-                        <Badge key={i} variant="secondary" className="bg-white border-gray-100 text-gray-600 px-3 py-1 rounded-full text-[10px] uppercase tracking-wider font-bold">
+                        <Badge key={i} variant="secondary" className="bg-claude-warm-sand/50 border-claude-border-cream text-claude-olive-gray px-3 py-1 rounded-full text-[10px] uppercase tracking-wider font-bold">
                           {kw}
                         </Badge>
                       ))}
                     </div>
-                    <Separator className="bg-gray-100" />
-                    <div className="space-y-4">
-                      <h4 className="text-lg font-bold flex items-center gap-2">
-                        <Layers className="w-5 h-5 text-blue-600" />
+                    <Separator className="bg-claude-border-cream" />
+                    <div className="space-y-6">
+                      <h4 className="text-xl font-serif font-medium flex items-center gap-3">
+                        <Layers className="w-6 h-6 text-claude-terracotta" />
                         {result.questions.length} Questions Found
                       </h4>
-                      <ScrollArea className="h-[420px] pr-4">
-                        <div className="space-y-4">
+                      <ScrollArea className="h-[500px] pr-4">
+                        <div className="space-y-6">
                           {result.questions.map((q, i) => (
-                            <div key={i} className="p-5 rounded-2xl bg-white border border-gray-100 shadow-sm hover:shadow-md transition-all">
-                              <div className="flex items-start justify-between mb-3">
-                                <Badge className={`border-none rounded-lg text-[10px] font-bold ${q.type === "PYQ" ? "bg-purple-50 text-purple-600" :
-                                  q.type === "HOTS" ? "bg-orange-50 text-orange-600" :
-                                    q.type === "Sample Paper" ? "bg-green-50 text-green-600" :
-                                      "bg-blue-50 text-blue-600"
+                            <div key={i} className="p-6 rounded-claude-xl bg-white border border-claude-border-cream shadow-claude-ring hover:shadow-claude-whisper transition-all duration-300">
+                              <div className="flex items-start justify-between mb-4">
+                                <Badge className={`border-none rounded-claude-sm text-[10px] font-bold px-2 py-0.5 ${q.type === "PYQ" ? "bg-purple-100 text-purple-700" :
+                                  q.type === "HOTS" ? "bg-orange-100 text-orange-700" :
+                                    q.type === "Sample Paper" ? "bg-green-100 text-green-700" :
+                                      "bg-claude-warm-sand text-claude-olive-gray"
                                   }`}>
                                   {q.type}
                                 </Badge>
-                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{q.year}</span>
+                                <span className="text-[10px] font-bold text-claude-stone-gray uppercase tracking-widest">{q.year}</span>
                               </div>
-                              <p className="text-sm text-[#1D1D1F] font-medium leading-relaxed mb-3">{q.text}</p>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4">
+                              <p className="text-base text-claude-near-black font-medium leading-relaxed mb-4 font-serif">{q.text}</p>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5">
                                 {q.options.map((opt, optIdx) => (
-                                  <div key={optIdx} className="flex items-center gap-2 p-2 rounded-lg bg-gray-50 border border-gray-100 text-xs text-[#434345]">
-                                    <span className="font-bold text-blue-500">{String.fromCharCode(65 + optIdx)}.</span>
+                                  <div key={optIdx} className="flex items-center gap-3 p-3 rounded-claude-md bg-claude-parchment/30 border border-claude-border-cream text-sm text-claude-olive-gray">
+                                    <span className="font-bold text-claude-terracotta">{String.fromCharCode(65 + optIdx)}.</span>
                                     {opt}
                                   </div>
                                 ))}
                               </div>
-                              <details className="mb-3 group/ans">
-                                <summary className="text-[11px] font-bold text-blue-600 cursor-pointer hover:text-blue-700 list-none flex items-center gap-1">
-                                  <ChevronRight className="w-3 h-3 transition-transform group-open/ans:rotate-90" />
-                                  Show Answer
+                              <details className="mb-4 group/ans">
+                                <summary className="text-xs font-bold text-claude-terracotta cursor-pointer hover:underline list-none flex items-center gap-1">
+                                  <ChevronRight className="w-3.5 h-3.5 transition-transform group-open/ans:rotate-90" />
+                                  Reveal Answer Key
                                 </summary>
-                                <div className="mt-2 p-3 bg-green-50 rounded-xl border border-green-100 text-xs font-bold text-green-700">
+                                <div className="mt-3 p-4 bg-green-50 rounded-claude-md border border-green-100 text-sm font-bold text-green-800">
                                   Answer: {q.answer}
                                 </div>
                               </details>
-                              <div className="flex items-center gap-2">
-                                <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-                                <span className="text-[11px] text-[#86868B] font-medium">{q.topic}</span>
-                                <Separator orientation="vertical" className="h-3 bg-gray-200" />
-                                <span className="text-[11px] text-[#86868B] font-medium truncate max-w-[200px]">{q.source}</span>
+                              <div className="flex items-center gap-3">
+                                <div className="w-2 h-2 rounded-full bg-claude-terracotta/40" />
+                                <span className="text-xs text-claude-stone-gray font-medium">{q.topic}</span>
+                                <Separator orientation="vertical" className="h-3 bg-claude-border-cream" />
+                                <span className="text-xs text-claude-stone-gray font-medium truncate max-w-[250px]">{q.source}</span>
                               </div>
                             </div>
                           ))}
@@ -636,16 +635,16 @@ export default function App() {
                 </Card>
               </div>
             ) : (
-              <div className="h-full min-h-[500px] flex flex-col items-center justify-center text-center p-12 rounded-3xl border-2 border-dashed border-gray-200 bg-white/50">
-                <div className="w-20 h-20 rounded-3xl bg-gray-50 flex items-center justify-center mb-6">
-                  <FileText className="w-10 h-10 text-gray-300" />
+              <div className="h-full min-h-[500px] flex flex-col items-center justify-center text-center p-12 rounded-claude-2xl border-2 border-dashed border-claude-border-cream bg-claude-ivory/50">
+                <div className="w-24 h-24 rounded-claude-3xl bg-claude-parchment flex items-center justify-center mb-8 shadow-claude-ring">
+                  <FileText className="w-10 h-10 text-claude-stone-gray/50" />
                 </div>
-                <h3 className="text-2xl font-bold text-gray-400 mb-2">No Results Yet</h3>
-                <p className="text-gray-400 max-w-xs">
-                  Upload your {subject} notes and click scan.
+                <h3 className="text-3xl font-serif font-medium text-claude-stone-gray mb-3">No Analysis Yet</h3>
+                <p className="text-claude-olive-gray max-w-sm leading-relaxed">
+                  Upload your {subject} notes or select topics to generate a comprehensive question bank.
                 </p>
                 {credits > 0 && (
-                  <p className="text-sm text-blue-500 mt-3 font-medium">{credits} scan{credits !== 1 ? "s" : ""} available</p>
+                  <p className="text-sm text-claude-terracotta mt-6 font-bold uppercase tracking-widest">{credits} scan{credits !== 1 ? "s" : ""} remaining</p>
                 )}
               </div>
             )}
@@ -654,37 +653,36 @@ export default function App() {
 
         {/* History */}
         {history.length > 0 && (
-          <div className="mt-12">
-            <h2 className="text-2xl font-bold mb-6">Scan History</h2>
-            <div className="space-y-4">
+          <div className="mt-20 border-t border-claude-border-cream pt-16">
+            <h2 className="text-3xl font-serif font-medium mb-10 text-claude-near-black">Consult Past Analyses</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {history.map((item, i) => (
-                <details key={i} className="group bg-white rounded-2xl border border-gray-100 shadow-sm">
-                  <summary className="p-5 cursor-pointer list-none flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center">
-                        <FileText className="w-5 h-5 text-gray-400" />
+                <details key={i} className="group bg-claude-ivory rounded-claude-xl border border-claude-border-cream shadow-sm hover:shadow-claude-ring transition-all duration-300 overflow-hidden">
+                  <summary className="p-6 cursor-pointer list-none flex items-center justify-between bg-white/40">
+                    <div className="flex items-center gap-5">
+                      <div className="w-12 h-12 rounded-claude-lg bg-claude-parchment flex items-center justify-center">
+                        <FileText className="w-6 h-6 text-claude-terracotta/70" />
                       </div>
                       <div>
-                        <h3 className="font-bold text-sm">{item.topicDetected}</h3>
-                        <p className="text-xs text-gray-500">{new Date(item.timestamp).toLocaleString()}</p>
+                        <h3 className="font-bold text-base text-claude-near-black">{item.topicDetected}</h3>
+                        <p className="text-xs text-claude-stone-gray font-medium uppercase tracking-wider mt-1">{new Date(item.timestamp).toLocaleDateString()} · {item.questions.length} Questions</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-gray-400">{item.questions.length} questions</span>
-                      <ChevronRight className="w-5 h-5 text-gray-400 transition-transform group-open:rotate-90" />
-                    </div>
+                    <ChevronRight className="w-5 h-5 text-claude-stone-gray transition-transform group-open:rotate-90" />
                   </summary>
-                  <div className="p-5 border-t border-gray-100 space-y-3">
-                    <p className="text-sm text-gray-600">{item.summary}</p>
-                    <div className="flex flex-wrap gap-1.5">
+                  <div className="p-6 border-t border-claude-border-cream space-y-4 bg-claude-ivory">
+                    <p className="text-sm text-claude-olive-gray leading-relaxed font-serif">{item.summary}</p>
+                    <div className="flex flex-wrap gap-2">
                       {item.keywords.map((kw, j) => (
-                        <Badge key={j} variant="secondary" className="text-[10px]">{kw}</Badge>
+                        <Badge key={j} variant="secondary" className="bg-claude-parchment text-claude-olive-gray border-claude-border-cream text-[10px] uppercase font-bold tracking-wider">{kw}</Badge>
                       ))}
                     </div>
-                    <Button variant="outline" size="sm" className="rounded-xl"
-                      onClick={() => generateQuestionsDocx(item.topicDetected, item.questions)}>
-                      <FileText className="w-4 h-4 mr-2" />Download DOCX
-                    </Button>
+                    <div className="pt-2">
+                      <Button variant="warm-sand" size="sm" className="rounded-claude-md"
+                        onClick={() => generateQuestionsDocx(item.topicDetected, item.questions)}>
+                        <FileText className="w-4 h-4 mr-2" />Download archive (.docx)
+                      </Button>
+                    </div>
                   </div>
                 </details>
               ))}
@@ -695,25 +693,26 @@ export default function App() {
 
       {/* ─── Buy Credits Modal ─────────────────────────────────────────────── */}
       {showBuyModal && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-8">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-2xl font-bold">Buy Credits</h2>
-                <p className="text-sm text-gray-500 mt-1">1 credit = 1 scan · up to 15 questions per scan</p>
+        <div className="fixed inset-0 bg-claude-near-black/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-claude-parchment rounded-claude-3xl shadow-claude-whisper max-w-md w-full p-10 relative border border-claude-border-cream">
+            <button onClick={() => setShowBuyModal(false)} className="absolute right-6 top-6 text-claude-stone-gray hover:text-claude-near-black transition-colors">
+              <X className="w-6 h-6" />
+            </button>
+            <div className="text-center mb-8">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-claude-2xl bg-claude-terracotta/10 text-claude-terracotta mb-4">
+                <Coins className="w-8 h-8" />
               </div>
-              <button onClick={() => setShowBuyModal(false)} className="text-gray-400 hover:text-gray-600">
-                <X className="w-5 h-5" />
-              </button>
+              <h2 className="text-3xl font-serif font-medium">Extend Your Scans</h2>
+              <p className="text-claude-olive-gray mt-2 leading-relaxed">1 credit = 1 complete question bank extraction</p>
             </div>
 
             {credits > 0 && (
-              <div className="mb-5 p-3 bg-blue-50 rounded-xl text-sm text-blue-700 font-medium">
-                You currently have <strong>{credits}</strong> credit{credits !== 1 ? "s" : ""} remaining.
+              <div className="mb-8 p-4 bg-claude-warm-sand/50 rounded-claude-lg text-sm text-claude-near-black font-medium border border-claude-border-cream text-center">
+                Current balance: <strong>{credits}</strong> credit{credits !== 1 ? "s" : ""}
               </div>
             )}
 
-            <div className="space-y-3">
+            <div className="space-y-4">
               {Object.entries(creditPacks).map(([packId, packData]) => {
                 const pack = packData as CreditPack;
                 return (
@@ -721,23 +720,23 @@ export default function App() {
                     key={packId}
                     onClick={() => handleBuyCredits(packId)}
                     disabled={!!isBuying}
-                    className="w-full flex items-center justify-between p-4 rounded-2xl border-2 border-gray-100 hover:border-blue-300 hover:bg-blue-50/30 transition-all disabled:opacity-60 text-left"
+                    className="w-full flex items-center justify-between p-5 rounded-claude-xl border border-claude-border-cream bg-white hover:border-claude-terracotta hover:bg-claude-parchment transition-all disabled:opacity-60 text-left shadow-sm group"
                   >
                     <div>
-                      <p className="font-bold text-gray-900">{pack.name}</p>
-                      <p className="text-sm text-gray-500">{pack.credits} scans · {Math.round(pack.amount / pack.credits / 100)} ₹/scan</p>
+                      <p className="font-bold text-claude-near-black group-hover:text-claude-terracotta transition-colors">{pack.name}</p>
+                      <p className="text-xs text-claude-olive-gray font-medium mt-1">{pack.credits} scans · {Math.round(pack.amount / pack.credits / 100)} ₹/scan</p>
                     </div>
                     <div className="text-right">
-                      <p className="font-bold text-lg text-blue-600">{pack.display}</p>
-                      {isBuying === packId && <Loader2 className="w-4 h-4 animate-spin text-blue-600 ml-auto mt-1" />}
+                      <p className="font-bold text-xl text-claude-terracotta">{pack.display}</p>
+                      {isBuying === packId && <Loader2 className="w-4 h-4 animate-spin text-claude-terracotta ml-auto mt-1" />}
                     </div>
                   </button>
                 );
               })}
             </div>
 
-            <p className="text-[11px] text-gray-400 text-center mt-5">
-              Secure payment via <span className="font-semibold">Razorpay</span> · UPI · Cards · Netbanking
+            <p className="text-[10px] text-claude-stone-gray text-center mt-8 uppercase tracking-widest font-bold">
+              Secure Gateway · Razorpay · UPI · Cards
             </p>
           </div>
         </div>

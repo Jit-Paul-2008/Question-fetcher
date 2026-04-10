@@ -54,7 +54,7 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 2000): Pr
       if (is503 && i < retries - 1) {
         console.warn(`[Retry] Gemini busy/503. Retrying in ${delay}ms... (Attempt ${i + 1}/${retries})`);
         await new Promise(resolve => setTimeout(resolve, delay));
-        delay *= 2; 
+        delay *= 2;
         continue;
       }
       throw err;
@@ -98,32 +98,32 @@ async function startServer() {
   app.get("/api/health", (req, res) => res.json({ status: "ok" }));
 
   // ─── Domain Mapping for Targeted Searching ──────────────────────────────────
-const EXAM_DOMAINS: Record<string, string[]> = {
-  jee: ["mathongo.com", "esaral.com", "vedantu.com", "toppr.com", "careers360.com", "allen.ac.in", "pw.live"],
-  neet: ["aakash.ac.in", "doubtnut.com", "vedantu.com", "toppr.com", "careers360.com", "pw.live"],
-  boards: ["learncbse.in", "selfstudys.com", "shaalaa.com", "byjus.com", "ncert.nic.in", "aglasem.com", "collegedekho.com", "pw.live"],
-  default: ["byjus.com", "toppr.com", "vedantu.com", "shaalaa.com", "careers360.com", "selfstudys.com", "pw.live"]
-};
+  const EXAM_DOMAINS: Record<string, string[]> = {
+    jee: ["mathongo.com", "esaral.com", "vedantu.com", "toppr.com", "careers360.com", "allen.ac.in", "pw.live"],
+    neet: ["aakash.ac.in", "doubtnut.com", "vedantu.com", "toppr.com", "careers360.com", "pw.live"],
+    boards: ["learncbse.in", "selfstudys.com", "shaalaa.com", "byjus.com", "ncert.nic.in", "aglasem.com", "collegedekho.com", "pw.live"],
+    default: ["byjus.com", "toppr.com", "vedantu.com", "shaalaa.com", "careers360.com", "selfstudys.com", "pw.live"]
+  };
 
-function getIncludeDomains(exams: string[]): string[] {
-  const domains = new Set<string>();
-  if (!exams || exams.length === 0) return EXAM_DOMAINS.default;
+  function getIncludeDomains(exams: string[]): string[] {
+    const domains = new Set<string>();
+    if (!exams || exams.length === 0) return EXAM_DOMAINS.default;
 
-  exams.forEach(exam => {
-    const e = exam.toLowerCase();
-    if (e.includes("jee")) {
-      EXAM_DOMAINS.jee.forEach(d => domains.add(d));
-    } else if (e.includes("neet")) {
-      EXAM_DOMAINS.neet.forEach(d => domains.add(d));
-    } else if (e.includes("cbse") || e.includes("icse") || e.includes("isc") || e.includes("wbsche") || e.includes("board")) {
-      EXAM_DOMAINS.boards.forEach(d => domains.add(d));
-    }
-  });
+    exams.forEach(exam => {
+      const e = exam.toLowerCase();
+      if (e.includes("jee")) {
+        EXAM_DOMAINS.jee.forEach(d => domains.add(d));
+      } else if (e.includes("neet")) {
+        EXAM_DOMAINS.neet.forEach(d => domains.add(d));
+      } else if (e.includes("cbse") || e.includes("icse") || e.includes("isc") || e.includes("wbsche") || e.includes("board")) {
+        EXAM_DOMAINS.boards.forEach(d => domains.add(d));
+      }
+    });
 
-  return domains.size > 0 ? Array.from(domains) : EXAM_DOMAINS.default;
-}
+    return domains.size > 0 ? Array.from(domains) : EXAM_DOMAINS.default;
+  }
 
-// ─── Razorpay: Create Order ───────────────────────────────────────────────
+  // ─── Razorpay: Create Order ───────────────────────────────────────────────
   app.post("/api/create-order", async (req, res) => {
     try {
       const { packId } = req.body;
@@ -199,7 +199,7 @@ function getIncludeDomains(exams: string[]): string[] {
       const { images, topic, subject, exams } = req.body;
       const imageList: string[] = Array.isArray(images) ? images : (images ? [images] : []);
       const MAX_IMAGES = 8;
-      
+
       if (imageList.length === 0 && (!topic || topic.trim().length === 0)) {
         return res.status(400).json({ error: "Please provide either notes (images/PDF) or specific topics to scan." });
       }
@@ -272,7 +272,7 @@ function getIncludeDomains(exams: string[]): string[] {
       }
 
       let analysisText = "";
-      
+
       try {
         if (imageList.length === 0) {
           // ── TOPIC ONLY MODE ──
@@ -349,7 +349,7 @@ function getIncludeDomains(exams: string[]): string[] {
         }
       } catch (err: any) {
         console.error("Gemini Vision Error:", err);
-        await profileRef.update({ credits: admin.firestore.FieldValue.increment(1) }).catch(() => {});
+        await profileRef.update({ credits: admin.firestore.FieldValue.increment(1) }).catch(() => { });
         return res.status(400).json({ error: "The AI safety filters blocked this content or the model is unavailable. Please ensure your notes are subject-appropriate." });
       }
 
@@ -357,7 +357,7 @@ function getIncludeDomains(exams: string[]): string[] {
       try {
         analysis = JSON.parse(analysisText || "{}");
       } catch (err) {
-        await profileRef.update({ credits: admin.firestore.FieldValue.increment(1) }).catch(() => {});
+        await profileRef.update({ credits: admin.firestore.FieldValue.increment(1) }).catch(() => { });
         return res.status(500).json({ error: "AI analysis format error. Please try again." });
       }
       console.log(`[Scan] uid=${uid} subject=${subjectLabel} topic=${analysis.topicDetected} queries=${analysis.searchQueries?.length}`);
@@ -369,10 +369,10 @@ function getIncludeDomains(exams: string[]): string[] {
 
       const allSearchResults = await Promise.all(
         queries.map((q: string) =>
-          tv.search(q, { 
-            searchDepth: "advanced", 
+          tv.search(q, {
+            searchDepth: "advanced",
             maxResults: 15,
-            includeDomains: includeDomains 
+            includeDomains: includeDomains
           })
             .catch(err => { console.error(`Tavily failed: ${q}`, err.message); return { results: [] }; })
         )
@@ -394,7 +394,7 @@ function getIncludeDomains(exams: string[]): string[] {
 
       // ── STEP 3: Gemini structures real questions from search results ──
       const structurePrompt = [
-        combined.length > 0 
+        combined.length > 0
           ? `Below are web search results containing real exam questions for ${analysis.topicDetected}. Your job is to EXTRACT and ORGANIZE actual questions found in these results.`
           : `Create high-quality original practice questions for the topic: "${analysis.topicDetected}". Since no specific web sources were found, use your expert knowledge to simulate real exam-style questions.`,
         "",
@@ -449,14 +449,14 @@ function getIncludeDomains(exams: string[]): string[] {
         structuredText = structureResponse.text || "";
       } catch (err: any) {
         console.error("Gemini Structuring Error:", err);
-        await profileRef.update({ credits: admin.firestore.FieldValue.increment(1) }).catch(() => {});
+        await profileRef.update({ credits: admin.firestore.FieldValue.increment(1) }).catch(() => { });
         return res.status(500).json({ error: `Question structuring failed: ${err.message}` });
       }
 
       let structured: any = {};
       try {
         structured = JSON.parse(structuredText || "{}");
-        
+
         // ── Post-processing: Source detail & Deduplication ──
         if (structured.questions && Array.isArray(structured.questions)) {
           const uniqueTexts = new Set<string>();
@@ -466,7 +466,7 @@ function getIncludeDomains(exams: string[]): string[] {
               q.source = q.source.replace(/https?:\/\/[^\s]+/g, "").trim();
               if (!q.source) q.source = "Standard Practice Question";
             }
-            
+
             // 2. Strict Deduplication by text content
             const normalizedText = (q.text || "").toLowerCase().replace(/\s+/g, " ").trim();
             if (!normalizedText || uniqueTexts.has(normalizedText)) {
@@ -477,7 +477,7 @@ function getIncludeDomains(exams: string[]): string[] {
           });
         }
       } catch (err) {
-        await profileRef.update({ credits: admin.firestore.FieldValue.increment(1) }).catch(() => {});
+        await profileRef.update({ credits: admin.firestore.FieldValue.increment(1) }).catch(() => { });
         return res.status(500).json({ error: "AI structuring format error. Please try again." });
       }
       console.log(`[Scan] Extracted ${structured.questions?.length || 0} unique questions`);
@@ -496,9 +496,9 @@ function getIncludeDomains(exams: string[]): string[] {
           .catch(() => { }); // best-effort refund
       }
       console.error("Scan error details:", error);
-      
+
       const isHighDemand = error.message?.includes("503") || error.message?.includes("high demand") || error.status === 503;
-      let message = isHighDemand 
+      let message = isHighDemand
         ? "Google's AI servers are currently experiencing high demand. Please try again in 5-10 minutes."
         : (error.message || "Internal server error");
 
