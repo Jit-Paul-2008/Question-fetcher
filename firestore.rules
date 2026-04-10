@@ -58,7 +58,11 @@ service cloud.firestore {
 
     match /users/{userId}/profile/data {
       allow read: if isOwner(userId);
-      allow write: if isOwner(userId); // Simplified for prototype: user can update their own premium status
+      // Allow users to initialize their profile only with the starter 3 credits
+      allow create: if isOwner(userId) && request.resource.data.credits == 3;
+      // Block all client-side updates to credits (must be done by server)
+      allow update: if false;
+      allow delete: if isOwner(userId);
     }
   }
 }

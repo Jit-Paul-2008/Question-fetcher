@@ -29,20 +29,20 @@ interface HistoryItem extends ScanResult {
 }
 
 const EXAM_OPTIONS = [
-  { id: "jee-mains",    label: "JEE Mains"       },
-  { id: "jee-advanced", label: "JEE Advanced"     },
-  { id: "cbse-12",      label: "12th CBSE"        },
-  { id: "cbse-10",      label: "10th CBSE"        },
-  { id: "icse-10",      label: "10th ICSE"        },
-  { id: "isc-12",       label: "12th ISC"         },
-  { id: "wbsche-12",    label: "12th WBSCHE"      },
+  { id: "jee-mains", label: "JEE Mains" },
+  { id: "jee-advanced", label: "JEE Advanced" },
+  { id: "cbse-12", label: "12th CBSE" },
+  { id: "cbse-10", label: "10th CBSE" },
+  { id: "icse-10", label: "10th ICSE" },
+  { id: "isc-12", label: "12th ISC" },
+  { id: "wbsche-12", label: "12th WBSCHE" },
 ];
 
 const SUBJECTS = [
-  { group: "Science",     items: ["Physics", "Chemistry", "Biology", "Mathematics", "Computer Science", "Environmental Science"] },
-  { group: "Commerce",    items: ["Business Studies", "Accountancy", "Economics"] },
-  { group: "Humanities",  items: ["History", "Geography", "Political Science", "Sociology", "Psychology", "Philosophy"] },
-  { group: "Languages",   items: ["English", "Hindi", "Sanskrit", "Bengali"] },
+  { group: "Science", items: ["Physics", "Chemistry", "Biology", "Mathematics", "Computer Science", "Environmental Science"] },
+  { group: "Commerce", items: ["Business Studies", "Accountancy", "Economics"] },
+  { group: "Humanities", items: ["History", "Geography", "Political Science", "Sociology", "Psychology", "Philosophy"] },
+  { group: "Languages", items: ["English", "Hindi", "Sanskrit", "Bengali"] },
 ];
 const ALL_SUBJECTS = SUBJECTS.flatMap(g => g.items);
 
@@ -67,18 +67,18 @@ function loadRazorpayScript(): Promise<void> {
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 export default function App() {
-  const [user, setUser]           = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
-  const [credits, setCredits]     = useState(0);
-  const [images, setImages]       = useState<string[]>([]);
-  const [topic, setTopic]         = useState("");
-  const [subject, setSubject]     = useState("Chemistry");
+  const [credits, setCredits] = useState(0);
+  const [images, setImages] = useState<string[]>([]);
+  const [topic, setTopic] = useState("");
+  const [subject, setSubject] = useState("Chemistry");
   const [selectedExams, setSelectedExams] = useState<string[]>([]);
   const [isScanning, setIsScanning] = useState(false);
-  const [result, setResult]       = useState<ScanResult | null>(null);
-  const [history, setHistory]     = useState<HistoryItem[]>([]);
+  const [result, setResult] = useState<ScanResult | null>(null);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   const [showBuyModal, setShowBuyModal] = useState(false);
-  const [isBuying, setIsBuying]   = useState<string | null>(null);
+  const [isBuying, setIsBuying] = useState<string | null>(null);
   const [razorpayKeyId, setRazorpayKeyId] = useState("");
   const [creditPacks, setCreditPacks] = useState<Record<string, CreditPack>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -92,7 +92,7 @@ export default function App() {
         setRazorpayKeyId(data.razorpayKeyId || "");
         setCreditPacks(data.creditPacks || {});
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   // ─── Auth + profile ───────────────────────────────────────────────────────
@@ -111,11 +111,12 @@ export default function App() {
         const profileRef = doc(db, `users/${currentUser.uid}/profile`, "data");
         const profileDoc = await getDoc(profileRef);
 
-        if (profileDoc.exists()) {
-          const data = profileDoc.data();
-          setCredits(typeof data.credits === "number" ? data.credits : 0);
+        const data = profileDoc.exists() ? profileDoc.data() : null;
+
+        if (data && typeof data.credits === "number") {
+          setCredits(data.credits);
         } else {
-          // First login → grant free welcome credits
+          // First time initialized or missing credit field → grant free welcome credits
           const freeCredits = 3;
           await setDoc(profileRef, { credits: freeCredits }, { merge: true });
           setCredits(freeCredits);
@@ -178,10 +179,10 @@ export default function App() {
 
   // ─── Scan ─────────────────────────────────────────────────────────────────
   const startScan = async () => {
-    if (images.length === 0)    { toast.error("Please upload at least one image"); return; }
-    if (!topic)                 { toast.error("Please enter a topic reference");   return; }
+    if (images.length === 0) { toast.error("Please upload at least one image"); return; }
+    if (!topic) { toast.error("Please enter a topic reference"); return; }
     if (selectedExams.length === 0) { toast.error("Please select at least one exam"); return; }
-    if (credits <= 0)           { setShowBuyModal(true); return; }
+    if (credits <= 0) { setShowBuyModal(true); return; }
 
     setIsScanning(true);
     try {
@@ -368,9 +369,8 @@ export default function App() {
                 {/* Image drop zone */}
                 <div
                   onClick={() => fileInputRef.current?.click()}
-                  className={`relative rounded-2xl border-2 border-dashed transition-all cursor-pointer flex flex-col items-center justify-center p-5 ${
-                    images.length > 0 ? "border-blue-400 bg-blue-50/30" : "border-gray-200 hover:border-blue-300 hover:bg-gray-50"
-                  }`}
+                  className={`relative rounded-2xl border-2 border-dashed transition-all cursor-pointer flex flex-col items-center justify-center p-5 ${images.length > 0 ? "border-blue-400 bg-blue-50/30" : "border-gray-200 hover:border-blue-300 hover:bg-gray-50"
+                    }`}
                 >
                   {images.length > 0 ? (
                     <div className="w-full space-y-3">
@@ -530,12 +530,11 @@ export default function App() {
                           {result.questions.map((q, i) => (
                             <div key={i} className="p-5 rounded-2xl bg-white border border-gray-100 shadow-sm hover:shadow-md transition-all">
                               <div className="flex items-start justify-between mb-3">
-                                <Badge className={`border-none rounded-lg text-[10px] font-bold ${
-                                  q.type === "PYQ" ? "bg-purple-50 text-purple-600" :
+                                <Badge className={`border-none rounded-lg text-[10px] font-bold ${q.type === "PYQ" ? "bg-purple-50 text-purple-600" :
                                   q.type === "HOTS" ? "bg-orange-50 text-orange-600" :
-                                  q.type === "Sample Paper" ? "bg-green-50 text-green-600" :
-                                  "bg-blue-50 text-blue-600"
-                                }`}>
+                                    q.type === "Sample Paper" ? "bg-green-50 text-green-600" :
+                                      "bg-blue-50 text-blue-600"
+                                  }`}>
                                   {q.type}
                                 </Badge>
                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{q.year}</span>
@@ -654,21 +653,21 @@ export default function App() {
               {Object.entries(creditPacks).map(([packId, packData]) => {
                 const pack = packData as CreditPack;
                 return (
-                <button
-                  key={packId}
-                  onClick={() => handleBuyCredits(packId)}
-                  disabled={!!isBuying}
-                  className="w-full flex items-center justify-between p-4 rounded-2xl border-2 border-gray-100 hover:border-blue-300 hover:bg-blue-50/30 transition-all disabled:opacity-60 text-left"
-                >
-                  <div>
-                    <p className="font-bold text-gray-900">{pack.name}</p>
-                    <p className="text-sm text-gray-500">{pack.credits} scans · {Math.round(pack.amount / pack.credits / 100)} ₹/scan</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-bold text-lg text-blue-600">{pack.display}</p>
-                    {isBuying === packId && <Loader2 className="w-4 h-4 animate-spin text-blue-600 ml-auto mt-1" />}
-                  </div>
-                </button>
+                  <button
+                    key={packId}
+                    onClick={() => handleBuyCredits(packId)}
+                    disabled={!!isBuying}
+                    className="w-full flex items-center justify-between p-4 rounded-2xl border-2 border-gray-100 hover:border-blue-300 hover:bg-blue-50/30 transition-all disabled:opacity-60 text-left"
+                  >
+                    <div>
+                      <p className="font-bold text-gray-900">{pack.name}</p>
+                      <p className="text-sm text-gray-500">{pack.credits} scans · {Math.round(pack.amount / pack.credits / 100)} ₹/scan</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold text-lg text-blue-600">{pack.display}</p>
+                      {isBuying === packId && <Loader2 className="w-4 h-4 animate-spin text-blue-600 ml-auto mt-1" />}
+                    </div>
+                  </button>
                 );
               })}
             </div>

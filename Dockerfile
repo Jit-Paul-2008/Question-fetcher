@@ -19,5 +19,7 @@ RUN npm run build
 # Expose the port Express runs on
 EXPOSE 3000
 
-# Start the server
-CMD ["npm", "run", "dev"]
+ENV NODE_ENV=production
+
+# Start the server directly
+CMD ["npx", "tsx", "server.ts"]
