@@ -799,6 +799,56 @@ async function startServer() {
     }
   });
 
+  // ─── Knowledge Map API ────────────────────────────────────────────────────────
+  app.get("/api/graph-data", async (req, res) => {
+    try {
+      // Fetch up to 100 recent question banks
+      const snap = await db.collection("global_cache").limit(100).get();
+      const nodes = snap.docs.map(doc => ({
+        id: doc.id,
+        topic: doc.data().topicDetected || "Unknown Topic",
+        subject: doc.data().subject || "Chemistry",
+      }));
+
+      // No links for now, we will add them once the backfill is complete
+      const links: any[] = [];
+      res.json({ nodes, links });
+    } catch (err) {
+      console.error("[GraphData:Error]", err);
+      res.status(500).json({ error: "Failed to fetch map data" });
+    }
+  });
+
+  // ─── Admin Migration Endpoint (One-time use) ──────────────────────────────────
+  app.post("/api/admin/backfill", async (req, res) => {
+    try {
+      const snap = await db.collection("global_cache").get();
+      let vectorizedCount = 0;
+      
+      for (const doc of snap.docs) {
+        const data = doc.data();
+        const topic = data.topicDetected || "Unknown";
+        const subject = data.subject || "General";
+        const id = doc.id;
+
+        // Vectorize and upsert
+        const vector = await getTopicEmbedding(topic);
+        if (vector) {
+          await pcIndex.upsert([{
+            id,
+            values: vector,
+            metadata: { topicDetected: topic, subject }
+          }]);
+          vectorizedCount++;
+        }
+      }
+      res.json({ success: true, processed: snap.size, vectorized: vectorizedCount });
+    } catch (err) {
+      console.error("[Admin:Backfill:Error]", err);
+      res.status(500).json({ error: "Backfill failed" });
+    }
+  });
+
   // ─── Serve frontend ───────────────────────────────────────────────────────
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
