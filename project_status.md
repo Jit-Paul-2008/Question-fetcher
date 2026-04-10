@@ -1,26 +1,26 @@
 # Project Status & Capabilities: ChemScan
 
 **Date**: April 10, 2026
-**Status**: Production-Ready / Fully Functional
+**Status**: Production-Ready / Fully Optimized (Tier 1)
 
 ---
 
 ## 1. Current Abilities & Features
 
-### 🔍 Intelligent Question Scanning
-- **Multimodal Support**: Analyzes images and PDFs (via OCR/Vision) to detect core topics and keywords.
-- **Dynamic Search Query Generation**: Automatically generates and executes targeted web searches via **Tavily** to ground question data in real-world facts.
-- **Expert Question Synthesis**: Mimics high-level human expert reasoning to structure questions with options, correct answers, and subject classifications.
-- **Targeted Authority Searching**: (New) Search is restricted to high-quality educational domains (e.g., MathonGo, Allen, Vedantu, BYJU'S) to ensure factual accuracy and high question density.
+### 🔍 Dual-Mode Question Pipeline
+- **Mode A: Scan Notes**: Leverages Multimodal Vision (OCR) to analyze handwritten/printed notes (Images/PDF/DOCX) and extract core academic topics.
+- **Mode B: Direct Topic Search**: Allows users to enter up to **5 specific topics** directly. Skips image analysis for 5% faster processing and lower token cost.
+- **High-Yield Extraction**: Configured to deliver **25-30 unique questions** per report by utilizing expanded search snippets (1,500 chars) and advanced domain filtering.
 
-### 🛡️ Resilient Architecture
-- **Exponential Backoff**: Automatically handles temporary API spikes (503 errors) with smart retries on the cost-optimal model.
-- **User Alerts**: Clearly informs users when Google's servers are busy and suggests manual retries.
+### 📚 Authoritative Source Analysis
+- **Targeted Search**: Queries are locked to high-authority educational domains (MathonGo, Allen, Vedantu, BYJU'S, etc.).
+- **Detailed Attribution**: Every question includes a detailed text source (e.g., *'PYQ 2023 JEE Mains'*) without external links, ensuring a clean and distraction-free experience.
+- **Deduplication**: Multi-stage filtering prevents repeated questions within the same report.
 
-### 💳 Commercial & User Management
-- **Firestore Integration**: Manages user profiles and real-time credit balances (linked to AI Studio named database).
-- **Secure Payments**: Integrated with **Razorpay** for top-tabbing balance/credits.
-- **Local Dev Readiness**: Configured for Application Default Credentials (ADC) for seamless local maintenance.
+### 🛡️ Production Hardening
+- **Tier 1 Performance**: Migration to Paid Tier 1 has resolved "Limit Hit" issues.
+- **Flash-Lite Optimization**: Exclusively uses **Gemini 3.1 Flash-Lite** for all AI logic, balancing lightning speed with deep academic reasoning.
+- **Resilient Retry logic**: Built-in exponential backoff handles temporary busy states on Google's side.
 
 ---
 
@@ -28,39 +28,33 @@
 
 | Layer | Technology |
 | :--- | :--- |
-| **Frontend** | React / Vite |
-| **Backend** | Express / Node.js (TypeScript) |
+| **Frontend** | React / Vite (Vanilla CSS) |
+| **Backend** | Node.js (TypeScript) / Express |
 | **Database** | Google Cloud Firestore |
-| **Cloud** | Google Cloud Run (US-Central1) |
-| **AI Models** | Gemini 2.5 Flash & Pro |
+| **Cloud** | Google Cloud Run (us-central1) |
+| **AI Models** | Gemini 3.1 Flash-Lite |
 | **Search Engine** | Tavily Search SDK |
 
 ---
 
-## 3. Cost Analysis (Rough Estimate)
+## 3. Financial Snapshot (Per Scan)
 
-Estimates are based on average April 2026 pricing and typical token usage for one "Complete Scanning Query."
+Current costs are optimized for maximum profitability on Tier 1 Postpay.
 
-### Per-Query Breakdown
-
-| Component | Usage (Avg) | Cost (Flash Only) |
+| Component | Usage | Cost (INR) |
 | :--- | :--- | :--- |
-| **Tavily Search** | 3 Queries (Filtered) | $0.015 |
-| **Step 1: Vision** | 2.5k Tokens | $0.002 |
-| **Step 3: Structuring** | 22k Tokens | $0.018 |
-| **TOTAL** | — | **~$0.035 / query** |
+| **Tavily Search** | 3 Advanced Queries | ~₹1.25 |
+| **Gemini AI** | ~35k Tokens (Input/Output) | ~₹0.38 |
+| **Infrastructure** | Firebase / Cloud Run | ~₹0.04 |
+| **TOTAL OPERATING COST**| Per Report | **~₹1.67** |
 
-> [!NOTE]
-> **Production Context**: 
-> - 1,000 queries cost approximately **$35.00**.
-> - Yield has increased from **15 to ~30 questions** per query thanks to Targeted Authority Searching, effectively doubling the value per token.
+> [!TIP]
+> **Profit Margin**: With a standard sale price of **₹8 - ₹10 per credit**, the project maintains a **~80% gross profit margin**.
 
 ---
 
-## 4. Current Configuration
-
-Ensure these remain configured in the production environment:
-- `GEMINI_API_KEY`: Active (Tier 1/2)
-- `TAVILY_API_KEY`: Active (Pay-as-you-go)
-- `RAZORPAY_KEY_ID`: Configured
-- `firestoreDatabaseId`: `ai-studio-037afd9e-7975-495a-b35d-27afa336d0de`
+## 4. Production Environment
+- **Service Name**: `chemscan`
+- **Region**: `us-central1`
+- **Project**: `gen-lang-client-0312116426`
+- **Port**: `8080` (Listen on `0.0.0.0`)

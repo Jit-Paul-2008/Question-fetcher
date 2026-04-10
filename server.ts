@@ -200,8 +200,8 @@ function getIncludeDomains(exams: string[]): string[] {
       const imageList: string[] = Array.isArray(images) ? images : (images ? [images] : []);
       const MAX_IMAGES = 8;
       
-      if (!imageList.length || !imageList[0]) {
-        return res.status(400).json({ error: "No files provided" });
+      if (imageList.length === 0 && (!topic || topic.trim().length === 0)) {
+        return res.status(400).json({ error: "Please provide either notes (images/PDF) or specific topics to scan." });
       }
       if (imageList.length > MAX_IMAGES) {
         return res.status(400).json({
@@ -238,7 +238,6 @@ function getIncludeDomains(exams: string[]): string[] {
       const ai = new GoogleGenAI({ apiKey: geminiKey });
       const tv = tavily({ apiKey: tavilyKey });
 
-      // ── STEP 1: Gemini Vision — deduplicate topics across ALL images, generate 3 queries ──
       const examMap: Record<string, string> = {
         "jee-mains": "JEE Mains", "jee-advanced": "JEE Advanced",
         "cbse-12": "CBSE Class 12", "cbse-10": "CBSE Class 10",
@@ -272,46 +271,82 @@ function getIncludeDomains(exams: string[]): string[] {
         }
       }
 
-      const analysisPrompt = [
-        `You are analyzing ${subjectLabel} documents/images for a student preparing for: ${examLabels.join(", ")}.`,
-        `Subject: ${subjectLabel}. Topic: "${topic}". Files uploaded: ${imageList.length}.`,
-        "",
-        docxTexts.length > 0 ? `Additional text content from DOCX files:\n${docxTexts.join("\n\n")}\n` : "",
-        "STEP 1 — Extract and DEDUPLICATE topics:",
-        `Look at ALL uploaded content (images, PDFs, text) together as a single set of studies. List every unique sub-topic, formula, and diagram. Stay strictly within the subject: ${subjectLabel}.`,
-        "",
-        "STEP 2 — Generate EXACTLY 3 diverse search queries:",
-        "Distribute the detected topics across the 3 queries so each query is specific and targeted.",
-        "Do NOT dump all topics into a single query — that dilutes results.",
-        `Query 1: Focus on the TOP 1-2 most important topics. Format: (mainTopic1 OR mainTopic2) ${subjectLabel} ${primaryExam} PYQ past year questions with solutions`,
-        `Query 2: Focus on the NEXT 1-2 topics. Format: (nextTopic1 OR nextTopic2) ${subjectLabel} ${primaryExam} sample paper MCQ questions`,
-        `Query 3: Cover remaining topics + HOTS. Format: (remainingTopic1 OR remainingTopic2) ${subjectLabel} HOTS important questions ${allExams}`,
-      ].join("\n");
-
-      const analysisResponse = await withRetry(() =>
-        ai.models.generateContent({
-          model: "gemini-2.5-flash",
-          contents: { parts: [...contentParts, { text: analysisPrompt }] },
-          config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                topicDetected: { type: Type.STRING },
-                summary: { type: Type.STRING },
-                keywords: { type: Type.ARRAY, items: { type: Type.STRING } },
-                searchQueries: { type: Type.ARRAY, items: { type: Type.STRING } },
-              },
-              required: ["topicDetected", "summary", "keywords", "searchQueries"],
-            },
-          },
-        })
-      );
-
       let analysisText = "";
+      
       try {
-        // Safe access to response text
-        analysisText = analysisResponse.text || "";
+        if (imageList.length === 0) {
+          // ── TOPIC ONLY MODE ──
+          const topicPrompt = [
+            `You are assisting a student preparing for: ${examLabels.join(", ")}.`,
+            `Subject: ${subjectLabel}. Topics provided: "${topic}".`,
+            "",
+            "STEP 1 — Brainstorm Search Queries:",
+            "Based on the provided topics, generate 3 highly targeted search queries to find real exam questions.",
+            "Distribute the topics across the 3 queries.",
+            `Query 1: Focus on core PYQs for: ${topic}.`,
+            `Query 2: Focus on Sample Paper MCQs and detailed solutions for: ${topic}.`,
+            `Query 3: Focus on HOTS (Higher Order Thinking Skills) and complex problems for: ${topic}.`,
+          ].join("\n");
+
+          const response = await withRetry(() =>
+            ai.models.generateContent({
+              model: "gemini-3.1-flash-lite-preview",
+              contents: { parts: [{ text: topicPrompt }] },
+              config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                  type: Type.OBJECT,
+                  properties: {
+                    topicDetected: { type: Type.STRING },
+                    summary: { type: Type.STRING },
+                    keywords: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    searchQueries: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  },
+                  required: ["topicDetected", "summary", "keywords", "searchQueries"],
+                },
+              },
+            })
+          );
+          analysisText = response.text || "";
+        } else {
+          // ── Vision / Notes Mode ──
+          const analysisPrompt = [
+            `You are analyzing ${subjectLabel} documents/images for a student preparing for: ${examLabels.join(", ")}.`,
+            `Subject: ${subjectLabel}. Topic: "${topic}". Files uploaded: ${imageList.length}.`,
+            "",
+            docxTexts.length > 0 ? `Additional text content from DOCX files:\n${docxTexts.join("\n\n")}\n` : "",
+            "STEP 1 — Extract and DEDUPLICATE topics:",
+            `Look at ALL uploaded content (images, PDFs, text) together as a single set of studies. List every unique sub-topic, formula, and diagram. Stay strictly within the subject: ${subjectLabel}.`,
+            "",
+            "STEP 2 — Generate EXACTLY 3 diverse search queries:",
+            "Distribute the detected topics across the 3 queries so each query is specific and targeted.",
+            "Do NOT dump all topics into a single query — that dilutes results.",
+            `Query 1: Focus on the TOP 1-2 most important topics. Format: (mainTopic1 OR mainTopic2) ${subjectLabel} ${primaryExam} PYQ past year questions with solutions`,
+            `Query 2: Focus on the NEXT 1-2 topics. Format: (nextTopic1 OR nextTopic2) ${subjectLabel} ${primaryExam} sample paper MCQ questions`,
+            `Query 3: Cover remaining topics + HOTS. Format: (remainingTopic1 OR remainingTopic2) ${subjectLabel} HOTS important questions ${allExams}`,
+          ].join("\n");
+
+          const analysisResponse = await withRetry(() =>
+            ai.models.generateContent({
+              model: "gemini-3.1-flash-lite-preview",
+              contents: { parts: [...contentParts, { text: analysisPrompt }] },
+              config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                  type: Type.OBJECT,
+                  properties: {
+                    topicDetected: { type: Type.STRING },
+                    summary: { type: Type.STRING },
+                    keywords: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    searchQueries: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  },
+                  required: ["topicDetected", "summary", "keywords", "searchQueries"],
+                },
+              },
+            })
+          );
+          analysisText = analysisResponse.text || "";
+        }
       } catch (err: any) {
         console.error("Gemini Vision Error:", err);
         await profileRef.update({ credits: admin.firestore.FieldValue.increment(1) }).catch(() => {});
@@ -336,7 +371,7 @@ function getIncludeDomains(exams: string[]): string[] {
         queries.map((q: string) =>
           tv.search(q, { 
             searchDepth: "advanced", 
-            maxResults: 10, // Increased results because domains are now high-quality
+            maxResults: 15,
             includeDomains: includeDomains 
           })
             .catch(err => { console.error(`Tavily failed: ${q}`, err.message); return { results: [] }; })
@@ -349,9 +384,8 @@ function getIncludeDomains(exams: string[]): string[] {
         for (const r of (sr.results || [])) {
           if (!seenUrls.has(r.url)) {
             seenUrls.add(r.url);
-            // Trim content to 800 chars — questions appear in the first few hundred
-            // chars; sending full pages wastes tokens and triggers quota limits.
-            const snippet = (r.content || "").slice(0, 800).trim();
+            // Trim to 1500 chars — enough to capture full questions + options from most sources
+            const snippet = (r.content || "").slice(0, 1500).trim();
             if (snippet) combined.push(`[Source: ${r.url}]\n${snippet}`);
           }
         }
@@ -372,14 +406,15 @@ function getIncludeDomains(exams: string[]): string[] {
         "- **Detailed Source Instruction**: Specify where the question is from in detail (e.g., 'PYQ 2023 JEE Mains', 'NEET 2021', 'CBSE Board 2020').",
         "- **NO LINKS**: Do NOT include any URLs or web links in the source field. Use only text describing the source.",
         "- **NO REPETITION**: Do not provide duplicate questions. Each question must be unique in content and phrasing.",
-        `- Aim for 20-30 high-quality, unique questions. Stay within ${subjectLabel}: "${analysis.topicDetected}".`,
+        `- Aim for 25-30 high-quality, unique questions. Stay within ${subjectLabel}: "${analysis.topicDetected}".`,
+        "- If the search results do not contain enough questions, supplement with your EXPERT knowledge of exam-style questions for this topic — do not stop short.",
         "",
         combined.length > 0 ? `Search Results:\n${combined.join("\n---\n")}` : "No search results available. Proceed with expert generation.",
       ].join("\n");
 
       const structureResponse = await withRetry(() =>
         ai.models.generateContent({
-          model: "gemini-2.5-flash",
+          model: "gemini-3.1-flash-lite-preview",
           contents: structurePrompt,
           config: {
             responseMimeType: "application/json",

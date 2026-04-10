@@ -70,6 +70,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [credits, setCredits] = useState(0);
+  const [scanMode, setScanMode] = useState<"notes" | "topics">("notes");
   const [images, setImages] = useState<string[]>([]);
   const [topic, setTopic] = useState("");
   const [subject, setSubject] = useState("Chemistry");
@@ -83,6 +84,11 @@ export default function App() {
   const [creditPacks, setCreditPacks] = useState<Record<string, CreditPack>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const MAX_IMAGES = 8;
+  const MAX_TOPICS = 5;
+
+  const getTopicsCount = (str: string) => str.split(/[,|\n]+/).map(t => t.trim()).filter(t => t.length > 0).length;
+  const topicsCount = getTopicsCount(topic);
+
 
   // ─── Fetch public config (Razorpay key, packs) ──────────────────────────
   useEffect(() => {
@@ -179,15 +185,30 @@ export default function App() {
 
   // ─── Scan ─────────────────────────────────────────────────────────────────
   const startScan = async () => {
-    if (images.length === 0) { toast.error("Please upload at least one image"); return; }
-    if (!topic) { toast.error("Please enter a topic reference"); return; }
-    if (selectedExams.length === 0) { toast.error("Please select at least one exam"); return; }
+    if (scanMode === "notes" && images.length === 0) { 
+      toast.error("Please upload at least one image or document."); 
+      return; 
+    }
+    if (!topic || topic.trim() === "") { 
+      toast.error("Please enter at least one topic."); 
+      return; 
+    }
+    if (topicsCount > MAX_TOPICS) {
+      toast.error(`Please limit your scan to ${MAX_TOPICS} topics at a time.`);
+      return;
+    }
+    if (selectedExams.length === 0) { 
+      toast.error("Please select at least one target exam."); 
+      return; 
+    }
     if (credits <= 0) { setShowBuyModal(true); return; }
 
     setIsScanning(true);
     try {
       const idToken = await user!.getIdToken();
-      const scanResult = await scanSubjectNote(images, topic, subject, selectedExams, idToken);
+      // In topics mode, we send empty images array to trigger text-only analysis
+      const scanImages = scanMode === "notes" ? images : [];
+      const scanResult = await scanSubjectNote(scanImages, topic, subject, selectedExams, idToken);
 
       // Credit was deducted server-side atomically — update local UI
       setCredits(prev => Math.max(0, prev - 1));
@@ -357,12 +378,30 @@ export default function App() {
           {/* Left: Upload Panel */}
           <div className="lg:col-span-5 space-y-6">
             <Card className="border-none shadow-2xl shadow-gray-200/50 bg-white/80 backdrop-blur-xl rounded-3xl overflow-hidden">
-              <CardHeader>
+              <CardHeader className="pb-4">
+                <div className="flex bg-gray-100 p-1 rounded-2xl mb-4">
+                  <button
+                    onClick={() => setScanMode("notes")}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-[11px] font-bold transition-all ${scanMode === "notes" ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    Scan Notes
+                  </button>
+                  <button
+                    onClick={() => { setScanMode("topics"); setImages([]); }}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-[11px] font-bold transition-all ${scanMode === "topics" ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                  >
+                    <Search className="w-3.5 h-3.5" />
+                    Search Topics
+                  </button>
+                </div>
                 <CardTitle className="flex items-center gap-2">
-                  <Upload className="w-5 h-5 text-blue-600" />
-                  Upload Notes
+                  {scanMode === "notes" ? <FileText className="w-5 h-5 text-blue-600" /> : <BookOpen className="w-5 h-5 text-blue-600" />}
+                  {scanMode === "notes" ? "Upload Notes" : "Topic Search"}
                 </CardTitle>
-                <CardDescription>Multiple pages supported · max {MAX_IMAGES} per scan</CardDescription>
+                <CardDescription>
+                  {scanMode === "notes" ? `Extract questions from your images/PDFs` : `Find questions based on chapters only`}
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-5">
 
@@ -438,14 +477,27 @@ export default function App() {
 
                 {/* Topic input */}
                 <div className="space-y-2">
-                  <Label htmlFor="topic" className="text-sm font-semibold">Topic Reference</Label>
+                  <div className="flex justify-between items-center">
+                    <Label htmlFor="topic" className="text-sm font-semibold">
+                      {scanMode === "notes" ? "Chapter/Topic Reference" : "Target Topics (Max 5)"}
+                    </Label>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${topicsCount > MAX_TOPICS ? "bg-red-100 text-red-600" : "bg-gray-100 text-gray-400"}`}>
+                      {topicsCount}/{MAX_TOPICS} topics
+                    </span>
+                  </div>
                   <Input
                     id="topic"
-                    placeholder={`e.g. ${subject === "Physics" ? "Electrostatics, Work Energy" : subject === "Biology" ? "Cell Division, Genetics" : "Organic Chemistry, Equilibrium"}...`}
+                    placeholder={scanMode === "notes" 
+                      ? `e.g. ${subject === "Physics" ? "Electrostatics, Work Energy" : "Organic Chemistry"} ...`
+                      : "Enter up to 5 topics separated by commas..."
+                    }
                     value={topic}
                     onChange={e => setTopic(e.target.value)}
-                    className="rounded-xl border-gray-200 focus:ring-blue-500"
+                    className={`rounded-xl border-gray-200 focus:ring-blue-500 ${topicsCount > MAX_TOPICS ? "border-red-300 ring-1 ring-red-300" : ""}`}
                   />
+                  {topicsCount > MAX_TOPICS && (
+                    <p className="text-[10px] text-red-500 font-bold mt-1">Please remove {topicsCount - MAX_TOPICS} topic(s) to continue.</p>
+                  )}
                 </div>
 
                 {/* Exam selector */}
@@ -470,7 +522,7 @@ export default function App() {
                 {/* Scan button */}
                 <Button
                   onClick={startScan}
-                  disabled={isScanning || images.length === 0}
+                  disabled={isScanning || (scanMode === "notes" && images.length === 0) || topicsCount > MAX_TOPICS || !topic.trim()}
                   className="w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-all shadow-lg shadow-blue-200 disabled:opacity-50"
                 >
                   {isScanning ? (
@@ -478,7 +530,7 @@ export default function App() {
                   ) : credits <= 0 ? (
                     <><ShoppingCart className="w-4 h-4 mr-2" />Buy Credits to Scan</>
                   ) : (
-                    <><Search className="w-4 h-4 mr-2" />Scan & Generate ({credits} credit{credits !== 1 ? "s" : ""} left)</>
+                    <><Search className="w-4 h-4 mr-2" />{scanMode === "notes" ? "Scan Notes & Generate" : "Search Topics & Generate"} ({credits} credit{credits !== 1 ? "s" : ""} left)</>
                   )}
                 </Button>
 
