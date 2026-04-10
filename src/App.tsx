@@ -27,6 +27,11 @@ import { scanChemistryNote, ScanResult } from "@/src/lib/gemini";
 import { generateQuestionsPDF } from "@/src/lib/pdf";
 import { generateQuestionsDocx } from "@/src/lib/docx";
 
+interface HistoryItem extends ScanResult {
+  image: string;
+  timestamp: number;
+}
+
 const EXAM_OPTIONS = [
   { id: "jee-mains", label: "JEE Mains" },
   { id: "jee-advanced", label: "JEE Advanced" },
@@ -43,6 +48,7 @@ export default function App() {
   const [selectedExams, setSelectedExams] = useState<string[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [result, setResult] = useState<ScanResult | null>(null);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -82,6 +88,7 @@ export default function App() {
     try {
       const scanResult = await scanChemistryNote(image, topic, selectedExams);
       setResult(scanResult);
+      setHistory(prev => [{ ...scanResult, image, timestamp: Date.now() }, ...prev]);
       toast.success("Scan completed successfully!");
     } catch (error) {
       console.error(error);
@@ -315,6 +322,39 @@ export default function App() {
             )}
           </div>
         </div>
+
+        {history.length > 0 && (
+          <div className="mt-12">
+            <h2 className="text-2xl font-bold mb-6">Analysis History</h2>
+            <div className="space-y-4">
+              {history.map((item, i) => (
+                <details key={i} className="group bg-white rounded-2xl border border-gray-100 shadow-sm">
+                  <summary className="p-6 cursor-pointer list-none flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <img src={item.image} alt="Note" className="w-12 h-12 rounded-lg object-cover" referrerPolicy="no-referrer" />
+                      <div>
+                        <h3 className="font-bold">{item.topicDetected}</h3>
+                        <p className="text-xs text-gray-500">{new Date(item.timestamp).toLocaleString()}</p>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-gray-400 transition-transform group-open:rotate-90" />
+                  </summary>
+                  <div className="p-6 border-t border-gray-100 space-y-4">
+                    <p className="text-sm text-gray-600">{item.summary}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {item.keywords.map((kw, j) => (
+                        <Badge key={j} variant="secondary" className="text-[10px]">{kw}</Badge>
+                      ))}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      Questions: {item.questions.length}
+                    </div>
+                  </div>
+                </details>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
       <Toaster />
     </div>
