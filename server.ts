@@ -56,8 +56,8 @@ async function startServer() {
     res.json({ received: true });
   });
 
-  // Standard JSON middleware for other routes
-  app.use(express.json());
+  // Standard JSON middleware for other routes (large limit for multi-image payloads)
+  app.use(express.json({ limit: "50mb" }));
 
   let stripeClient: Stripe | null = null;
   function getStripe(): Stripe {
@@ -102,11 +102,19 @@ async function startServer() {
     }
   });
 
-  // SECURE API SCAN (Moves keys to backend)
-  app.post("/api/scan", async (req, res) => {
+  // OPTIMIZED SCAN PIPELINE
+  // Architecture: Multi-image → 1 Gemini vision → N parallel Tavily → 1 Gemini structure
+  // Total: exactly 2 Gemini calls regardless of image count
+  app.post("/api/scan", express.json({ limit: "50mb" }), async (req, res) => {
     try {
-      const { image, topic, exams } = req.body;
+      const { images, topic, exams } = req.body;
+      // Support both single image (legacy) and multiple images
+      const imageList: string[] = Array.isArray(images) ? images : [images || req.body.image];
       
+      if (!imageList.length || !imageList[0]) {
+        return res.status(400).json({ error: "No images provided" });
+      }
+
       const geminiKey = process.env.GEMINI_API_KEY || process.env.chem1;
       const tavilyKey = process.env.TAVILY_API_KEY;
 
@@ -116,40 +124,117 @@ async function startServer() {
 
       const ai = new GoogleGenAI({ apiKey: geminiKey });
       const tv = tavily({ apiKey: tavilyKey });
-      const model = "gemini-2.0-flash";
 
-      // Analysis Step
-      const analysisPrompt = `Analyze this chemistry note. Guide: ${topic}. Search query for real ${exams.join(", ")} questions.`;
-      const imagePart = { inlineData: { mimeType: "image/jpeg", data: image.split(",")[1] } };
+      // ─── STEP 1: Single Gemini Vision Call (all images at once) ───
+      const examLabels = exams.map((e: string) => {
+        const found = [
+          { id: "jee-mains", label: "JEE Mains" },
+          { id: "jee-advanced", label: "JEE Advanced" },
+          { id: "cbse-12", label: "CBSE Class 12" },
+          { id: "cbse-10", label: "CBSE Class 10" },
+          { id: "icse-10", label: "ICSE Class 10" },
+          { id: "isc-12", label: "ISC Class 12" },
+          { id: "wbsche-12", label: "WBSCHE Class 12" },
+        ].find(x => x.id === e);
+        return found ? found.label : e;
+      });
 
-      const analysisResponse = await ai.getGenerativeModel({ model }).generateContent({
-        contents: [{ parts: [imagePart, { text: analysisPrompt }] }],
-        generationConfig: {
+      const imageParts = imageList.map((img: string) => ({
+        inlineData: {
+          mimeType: img.startsWith("data:image/png") ? "image/png" : "image/jpeg",
+          data: img.split(",")[1],
+        },
+      }));
+
+      const analysisPrompt = `You are analyzing chemistry notes for a student preparing for: ${examLabels.join(", ")}.
+Topic hint: "${topic}".
+
+From the uploaded image(s), extract:
+1. The exact sub-topics and concepts visible (e.g., "Le Chatelier's Principle", "SN1 vs SN2 mechanisms")
+2. Key formulas, reactions, or diagrams shown
+3. Generate 3-4 highly specific web search queries designed to find REAL past exam questions (PYQs), sample paper questions, and HOTS questions for these exact topics from ${examLabels.join(", ")}.
+
+Each search query should target a different angle:
+- Query 1: PYQ questions with solutions
+- Query 2: Sample paper / mock test questions  
+- Query 3: HOTS / higher order thinking questions
+- Query 4: MCQ question bank (if applicable)
+
+Keep queries specific to the detected sub-topic, NOT generic like "chemistry questions".`;
+
+      const analysisResponse = await ai.models.generateContent({
+        model: "gemini-2.0-flash",
+        contents: { parts: [...imageParts, { text: analysisPrompt }] },
+        config: {
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
             properties: {
-              keywords: { type: Type.ARRAY, items: { type: Type.STRING } },
               topicDetected: { type: Type.STRING },
               summary: { type: Type.STRING },
-              searchQuery: { type: Type.STRING },
+              keywords: { type: Type.ARRAY, items: { type: Type.STRING } },
+              searchQueries: { type: Type.ARRAY, items: { type: Type.STRING } },
             },
-            required: ["keywords", "topicDetected", "summary", "searchQuery"],
+            required: ["topicDetected", "summary", "keywords", "searchQueries"],
           },
         },
       });
 
-      const analysis = JSON.parse(analysisResponse.response.text());
+      const analysis = JSON.parse(analysisResponse.text || "{}");
+      console.log(`[Scan] Topic: ${analysis.topicDetected}, Queries: ${analysis.searchQueries?.length}`);
 
-      // Search Step
-      const searchResults = await tv.search(analysis.searchQuery, { searchDepth: "basic", maxResults: 5 });
-      const searchContext = searchResults.results.map(r => `Source: ${r.url}\nContent: ${r.content}`).join("\n\n");
+      // ─── STEP 2: Parallel Tavily Searches (cheap, basic tier) ───
+      const queries = (analysis.searchQueries || []).slice(0, 4);
+      const searchPromises = queries.map((q: string) =>
+        tv.search(q, { searchDepth: "basic", maxResults: 5 })
+          .catch(err => {
+            console.error(`Tavily search failed for: ${q}`, err.message);
+            return { results: [] };
+          })
+      );
 
-      // Final Question Gen
-      const finalPrompt = `Based on topic "${analysis.topicDetected}", generate 5-8 chemistry questions for ${exams.join(", ")}.\n\nContext:\n${searchContext}`;
-      const finalResponse = await ai.getGenerativeModel({ model }).generateContent({
-        contents: [{ role: "user", parts: [{ text: finalPrompt }] }],
-        generationConfig: {
+      const allSearchResults = await Promise.all(searchPromises);
+      
+      // Deduplicate and combine results
+      const seenUrls = new Set<string>();
+      const combinedResults: string[] = [];
+      for (const sr of allSearchResults) {
+        for (const r of (sr.results || [])) {
+          if (!seenUrls.has(r.url)) {
+            seenUrls.add(r.url);
+            combinedResults.push(`[Source: ${r.url}]\n${r.content}`);
+          }
+        }
+      }
+
+      const searchContext = combinedResults.join("\n---\n");
+      console.log(`[Scan] Found ${combinedResults.length} unique sources`);
+
+      // ─── STEP 3: Single Gemini Call to Structure Results ───
+      // This call ONLY organizes existing data, it does NOT generate questions
+      const structurePrompt = `You are a question bank organizer for ${examLabels.join(", ")} exams.
+Topic: "${analysis.topicDetected}" (${topic}).
+
+Below are web search results containing real exam questions, sample paper questions, PYQs, and practice problems.
+Your job is to EXTRACT and ORGANIZE the actual questions found in the search results.
+
+Rules:
+- ONLY use questions that appear in the search results. Do NOT invent questions.
+- Each question must have exactly 4 options (A, B, C, D) and a correct answer.
+- If a question from the results doesn't have options, create plausible options based on the content.
+- If the answer is provided in the source, use it. If not, determine the correct answer.
+- Categorize each as: "PYQ" (past year question), "Sample Paper", "HOTS", or "Practice"
+- Include the source URL and year if mentioned.
+- Extract as many valid questions as possible (aim for 8-15).
+- Stay strictly within the topic "${analysis.topicDetected}". Ignore unrelated questions.
+
+Search Results:
+${searchContext}`;
+
+      const structureResponse = await ai.models.generateContent({
+        model: "gemini-2.0-flash",
+        contents: structurePrompt,
+        config: {
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
@@ -176,9 +261,15 @@ async function startServer() {
         },
       });
 
-      const finalResult = JSON.parse(finalResponse.response.text());
+      const structured = JSON.parse(structureResponse.text || "{}");
+      console.log(`[Scan] Extracted ${structured.questions?.length || 0} questions`);
 
-      res.json({ ...analysis, questions: finalResult.questions });
+      res.json({
+        topicDetected: analysis.topicDetected,
+        summary: analysis.summary,
+        keywords: analysis.keywords || [],
+        questions: structured.questions || [],
+      });
     } catch (error: any) {
       console.error("Scan error:", error);
       res.status(500).json({ error: error.message });

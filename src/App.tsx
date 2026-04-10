@@ -54,7 +54,7 @@ export default function App() {
   const [scanCount, setScanCount] = useState(0);
   const FREE_SCAN_LIMIT = 3;
   const [isCheckingOut, setIsCheckingOut] = useState(false);
-  const [image, setImage] = useState<string | null>(null);
+  const [images, setImages] = useState<string[]>([]);
   const [topic, setTopic] = useState("");
   const [selectedExams, setSelectedExams] = useState<string[]>([]);
   const [isScanning, setIsScanning] = useState(false);
@@ -151,14 +151,21 @@ export default function App() {
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
+    const files = e.target.files;
+    if (!files) return;
+    Array.from(files).forEach(file => {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setImage(reader.result as string);
+        setImages(prev => [...prev, reader.result as string]);
       };
       reader.readAsDataURL(file);
-    }
+    });
+    // Reset input so the same file can be re-selected
+    e.target.value = "";
+  };
+
+  const removeImage = (index: number) => {
+    setImages(prev => prev.filter((_, i) => i !== index));
   };
 
   const toggleExam = (examId: string) => {
@@ -170,8 +177,8 @@ export default function App() {
   };
 
   const startScan = async () => {
-    if (!image) {
-      toast.error("Please upload an image first");
+    if (images.length === 0) {
+      toast.error("Please upload at least one image");
       return;
     }
     if (!topic) {
@@ -190,7 +197,7 @@ export default function App() {
 
     setIsScanning(true);
     try {
-      const scanResult = await scanChemistryNote(image, topic, selectedExams);
+      const scanResult = await scanChemistryNote(images, topic, selectedExams);
       setResult(scanResult);
       
       if (user) {
@@ -309,24 +316,39 @@ export default function App() {
                   <Upload className="w-5 h-5 text-blue-600" />
                   Upload Notes
                 </CardTitle>
-                <CardDescription>Upload a photo of your chemistry notes or diagrams</CardDescription>
+                <CardDescription>Upload photos of your chemistry notes or diagrams (multiple pages supported)</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div 
                   onClick={() => fileInputRef.current?.click()}
-                  className={`relative aspect-video rounded-2xl border-2 border-dashed transition-all cursor-pointer flex flex-col items-center justify-center p-6 ${
-                    image ? 'border-blue-400 bg-blue-50/30' : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
+                  className={`relative rounded-2xl border-2 border-dashed transition-all cursor-pointer flex flex-col items-center justify-center p-6 ${
+                    images.length > 0 ? 'border-blue-400 bg-blue-50/30' : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
                   }`}
                 >
-                  {image ? (
-                    <img src={image} alt="Uploaded note" className="w-full h-full object-contain rounded-lg" referrerPolicy="no-referrer" />
+                  {images.length > 0 ? (
+                    <div className="w-full space-y-3">
+                      <div className="flex flex-wrap gap-2 justify-center">
+                        {images.map((img, idx) => (
+                          <div key={idx} className="relative group">
+                            <img src={img} alt={`Note ${idx + 1}`} className="w-20 h-20 object-cover rounded-lg border border-gray-200" />
+                            <button
+                              onClick={(e) => { e.stopPropagation(); removeImage(idx); }}
+                              className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-xs"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-xs text-center text-blue-600 font-medium">{images.length} page(s) uploaded — click to add more</p>
+                    </div>
                   ) : (
                     <>
                       <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
                         <Upload className="w-6 h-6 text-gray-400" />
                       </div>
                       <p className="text-sm font-medium text-gray-600">Click to upload or drag and drop</p>
-                      <p className="text-xs text-gray-400 mt-1">JPG, PNG or WEBP (max. 10MB)</p>
+                      <p className="text-xs text-gray-400 mt-1">JPG, PNG or WEBP — select multiple pages at once</p>
                     </>
                   )}
                   <input 
@@ -335,6 +357,7 @@ export default function App() {
                     onChange={handleImageUpload} 
                     className="hidden" 
                     accept="image/*"
+                    multiple
                   />
                 </div>
 
@@ -374,7 +397,7 @@ export default function App() {
 
                 <Button 
                   onClick={startScan}
-                  disabled={isScanning || !image || (!isPremium && scanCount >= FREE_SCAN_LIMIT)}
+                  disabled={isScanning || images.length === 0 || (!isPremium && scanCount >= FREE_SCAN_LIMIT)}
                   className="w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-all shadow-lg shadow-blue-200 disabled:opacity-50"
                 >
                   {isScanning ? (

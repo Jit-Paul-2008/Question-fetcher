@@ -4,7 +4,7 @@ export interface Question {
   answer: string;
   source: string;
   year: string;
-  type: "Official Question Bank" | "PYQ" | "HOTS" | "Practice";
+  type: "Official Question Bank" | "PYQ" | "HOTS" | "Practice" | "Sample Paper";
   topic: string;
 }
 
@@ -16,18 +16,17 @@ export interface ScanResult {
 }
 
 export async function scanChemistryNote(
-  imageData: string,
+  images: string[],
   userTopic: string,
   exams: string[]
 ): Promise<ScanResult> {
-  // Use current window origin as base or fallback to relative path
   const API_BASE = window.location.origin;
-  
+
   const response = await fetch(`${API_BASE}/api/scan`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      image: imageData,
+      images,
       topic: userTopic,
       exams
     })
@@ -35,7 +34,7 @@ export async function scanChemistryNote(
 
   if (!response.ok) {
     const errorBody = await response.text();
-    let errorMessage = "Failed to scan note";
+    let errorMessage = "Failed to scan notes";
     try {
       const errorJson = JSON.parse(errorBody);
       errorMessage = errorJson.error || errorMessage;
