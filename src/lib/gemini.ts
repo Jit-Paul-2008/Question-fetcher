@@ -4,7 +4,7 @@ export interface Question {
   answer: string;
   source: string;
   year: string;
-  type: "Official Question Bank" | "PYQ" | "HOTS" | "Practice" | "Sample Paper";
+  type: "PYQ" | "Sample Paper" | "HOTS" | "Practice";
   topic: string;
 }
 
@@ -18,26 +18,26 @@ export interface ScanResult {
 export async function scanChemistryNote(
   images: string[],
   userTopic: string,
-  exams: string[]
+  subject: string,
+  exams: string[],
+  idToken: string
 ): Promise<ScanResult> {
   const API_BASE = window.location.origin;
 
   const response = await fetch(`${API_BASE}/api/scan`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      images,
-      topic: userTopic,
-      exams
-    })
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${idToken}`,
+    },
+    body: JSON.stringify({ images, topic: userTopic, subject, exams })
   });
 
   if (!response.ok) {
     const errorBody = await response.text();
     let errorMessage = "Failed to scan notes";
     try {
-      const errorJson = JSON.parse(errorBody);
-      errorMessage = errorJson.error || errorMessage;
+      errorMessage = JSON.parse(errorBody).error || errorMessage;
     } catch {
       errorMessage = errorBody || errorMessage;
     }
