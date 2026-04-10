@@ -8,6 +8,7 @@ import crypto from "crypto";
 import { GoogleGenAI, Type } from "@google/genai";
 import { tavily } from "@tavily/core";
 import admin from "firebase-admin";
+import { getFirestore } from "firebase-admin/firestore";
 import Razorpay from "razorpay";
 import mammoth from "mammoth";
 
@@ -17,7 +18,7 @@ if (admin.apps.length === 0) {
     projectId: process.env.GCLOUD_PROJECT || "gen-lang-client-0312116426",
   });
 }
-const db = admin.firestore();
+const db = getFirestore("ai-studio-037afd9e-7975-495a-b35d-27afa336d0de");
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -38,6 +39,28 @@ function getRazorpay() {
   const keySecret = process.env.RAZORPAY_KEY_SECRET;
   if (!keyId || !keySecret) throw new Error("Razorpay keys not configured");
   return new Razorpay({ key_id: keyId, key_secret: keySecret });
+}
+
+// ─── Retry Helper for AI Calls ───────────────────────────────────────────────
+async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 2000): Promise<T> {
+  let lastError: any;
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastError = err;
+      // Check for 503 or overload messages
+      const is503 = err.message?.includes("503") || err.status === 503 || err.code === 503 || err.message?.includes("high demand");
+      if (is503 && i < retries - 1) {
+        console.warn(`[Retry] Gemini busy/503. Retrying in ${delay}ms... (Attempt ${i + 1}/${retries})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        delay *= 2; 
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastError;
 }
 
 async function startServer() {
@@ -182,9 +205,8 @@ async function startServer() {
       const geminiKey = process.env.GEMINI_API_KEY || process.env.chem1;
       const tavilyKey = process.env.TAVILY_API_KEY;
       if (!geminiKey || !tavilyKey) {
-        // Refund the credit if config is broken
-        await profileRef.update({ credits: admin.firestore.FieldValue.increment(1) });
-        return res.status(500).json({ error: "Server API keys not configured" });
+        console.error("Missing API Keys: GEMINI_API_KEY or TAVILY_API_KEY not found in environment.");
+        return res.status(500).json({ error: "Server API keys not configured. Please check your .env file." });
       }
 
       const ai = new GoogleGenAI({ apiKey: geminiKey });
@@ -240,8 +262,8 @@ async function startServer() {
         `Query 3: Cover remaining topics + HOTS. Format: (remainingTopic1 OR remainingTopic2) ${subjectLabel} HOTS important questions ${allExams}`,
       ].join("\n");
 
-      const analysisResponse = await ai.models.generateContent({
-        model: "gemini-2.0-flash",
+      const analysisResponse = await withRetry(() => ai.models.generateContent({
+        model: "gemini-2.5-flash",
         contents: { parts: [...contentParts, { text: analysisPrompt }] },
         config: {
           responseMimeType: "application/json",
@@ -256,16 +278,16 @@ async function startServer() {
             required: ["topicDetected", "summary", "keywords", "searchQueries"],
           },
         },
-      });
+      }));
 
       let analysisText = "";
       try {
         // Safe access to response text
         analysisText = analysisResponse.text || "";
-      } catch (err) {
-        // Refund and report safety block
+      } catch (err: any) {
+        console.error("Gemini Vision Error:", err);
         await profileRef.update({ credits: admin.firestore.FieldValue.increment(1) }).catch(() => {});
-        return res.status(400).json({ error: "The AI safety filters blocked this content. Please ensure your notes are subject-appropriate." });
+        return res.status(400).json({ error: "The AI safety filters blocked this content or the model is unavailable. Please ensure your notes are subject-appropriate." });
       }
 
       let analysis: any = {};
@@ -317,8 +339,8 @@ async function startServer() {
         combined.length > 0 ? `Search Results:\n${combined.join("\n---\n")}` : "No search results available. Proceed with expert generation.",
       ].join("\n");
 
-      const structureResponse = await ai.models.generateContent({
-        model: "gemini-2.0-flash",
+      const structureResponse = await withRetry(() => ai.models.generateContent({
+        model: "gemini-2.5-flash",
         contents: structurePrompt,
         config: {
           responseMimeType: "application/json",
@@ -345,14 +367,15 @@ async function startServer() {
             required: ["questions"],
           },
         },
-      });
+      }));
 
       let structuredText = "";
       try {
         structuredText = structureResponse.text || "";
-      } catch (err) {
+      } catch (err: any) {
+        console.error("Gemini Structuring Error:", err);
         await profileRef.update({ credits: admin.firestore.FieldValue.increment(1) }).catch(() => {});
-        return res.status(500).json({ error: "Question structuring failed due to safety limits. Please try a more specific topic." });
+        return res.status(500).json({ error: `Question structuring failed: ${err.message}` });
       }
 
       let structured: any = {};
@@ -378,7 +401,11 @@ async function startServer() {
           .catch(() => { }); // best-effort refund
       }
       console.error("Scan error details:", error);
-      res.status(500).json({ error: error.message || "Internal server error" });
+      let message = error.message || "Internal server error";
+      if (error.code === "permission-denied" || (error.message && error.message.includes("credential"))) {
+        message = "Firebase Admin credential error. If running locally, please set up GOOGLE_APPLICATION_CREDENTIALS or run 'gcloud auth application-default login'.";
+      }
+      res.status(500).json({ error: message });
     }
   });
 
