@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "./components/ui/card";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Loader2, Zap, LayoutPanelLeft, Share2 } from "lucide-react";
 
 interface GraphNode {

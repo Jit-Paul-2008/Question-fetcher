@@ -165,9 +165,9 @@ async function startServer() {
       const order = await rzp.orders.create({
         amount: pack.amount,
         currency: "INR",
-        notes: { 
-          packId, 
-          credits: String(pack.credits), 
+        notes: {
+          packId,
+          credits: String(pack.credits),
           uid: uid || "unknown" // Store uid in order for webhook retrieval
         },
       });
@@ -287,8 +287,8 @@ async function startServer() {
         return res.status(400).send("Invalid signature");
       }
     } else if (!signature && secret) {
-       console.warn("[Webhook] Missing signature header.");
-       return res.status(400).send("Missing signature");
+      console.warn("[Webhook] Missing signature header.");
+      return res.status(400).send("Missing signature");
     }
 
     try {
@@ -307,13 +307,13 @@ async function startServer() {
         } else {
           console.warn(`[Webhook] Missing notes in payment ${payment_id}`, notes);
         }
-      } 
+      }
       else if (event.event === "refund.processed") {
         const refund = event.payload.refund.entity;
         const payment_id = refund.payment_id;
         console.log(`[Webhook:Refund] Processing refund for payment ${payment_id}`);
         await revokeCredits(payment_id);
-      } 
+      }
       else if (event.event === "payment.failed") {
         const payment = event.payload.payment.entity;
         console.warn(`[Webhook:Failed] Payment ${payment.id} failed. Reason: ${payment.error_description || "Unknown"}`);
@@ -359,7 +359,7 @@ async function startServer() {
         .orderBy("timestamp", "desc")
         .limit(20)
         .get();
-      
+
       const banks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       res.json({ banks });
     } catch (err: any) {
@@ -376,7 +376,7 @@ async function startServer() {
 
       // Generate a 6-digit alphanumeric code
       const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-      
+
       await db.collection("classrooms").doc(code).set({
         ...bank,
         creatorUid: uid,
@@ -396,8 +396,14 @@ async function startServer() {
       const { code } = req.body;
       if (!code) return res.status(400).json({ error: "Code required" });
 
-      const doc = await db.collection("classrooms").doc(code.toUpperCase()).get();
+      const classroomRef = db.collection("classrooms").doc(code.toUpperCase());
+      const doc = await classroomRef.get();
       if (!doc.exists) return res.status(404).json({ error: "Classroom not found" });
+
+      // Increment student count for the teacher dashboard
+      await classroomRef.update({
+        memberCount: admin.firestore.FieldValue.increment(1)
+      }).catch(() => {});
 
       res.json({ success: true, ...doc.data() });
     } catch (err: any) {
@@ -772,18 +778,18 @@ async function startServer() {
 
         // Save metadata & vector to Pinecone for future semantic searches
         (async () => {
-           const vector = await getTopicEmbedding(analysis.topicDetected || topic);
-           if (vector) {
-             await pcIndex.upsert([{
-               id: cacheKey,
-               values: vector,
-               metadata: { 
-                 topicDetected: analysis.topicDetected || topic,
-                 subject: subjectLabel 
-               }
-             }]);
-             console.log(`[Cache:SAVE:Vector] key=${cacheKey}`);
-           }
+          const vector = await getTopicEmbedding(analysis.topicDetected || topic);
+          if (vector) {
+            await pcIndex.upsert([{
+              id: cacheKey,
+              values: vector,
+              metadata: {
+                topicDetected: analysis.topicDetected || topic,
+                subject: subjectLabel
+              }
+            }]);
+            console.log(`[Cache:SAVE:Vector] key=${cacheKey}`);
+          }
         })().catch(err => console.error("[Cache:SaveError:Pinecone]", err));
       }
 
@@ -824,7 +830,7 @@ async function startServer() {
     try {
       const snap = await db.collection("global_cache").get();
       let vectorizedCount = 0;
-      
+
       for (const doc of snap.docs) {
         const data = doc.data();
         const topic = data.topicDetected || "Unknown";

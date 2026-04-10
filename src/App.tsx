@@ -22,7 +22,7 @@ import GraphView from "./GraphView";
 import { generateQuestionsDocx } from "@/src/lib/docx";
 import { auth, db, signInWithGoogle, logOut } from "@/src/lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
-import { collection, addDoc, onSnapshot, query, orderBy, doc, getDoc, setDoc } from "firebase/firestore";
+import { collection, addDoc, onSnapshot, query, orderBy, doc, getDoc, setDoc, where } from "firebase/firestore";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -91,6 +91,8 @@ export default function App() {
   const [classroomCode, setClassroomCode] = useState("");
   const [joinedClasses, setJoinedClasses] = useState<any[]>([]);
   const [isJoining, setIsJoining] = useState(false);
+  const [myClassrooms, setMyClassrooms] = useState<any[]>([]);
+  const [isCroomsLoading, setIsCroomsLoading] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const MAX_IMAGES = 8;
@@ -162,6 +164,25 @@ export default function App() {
         } as HistoryItem;
       }));
     }, () => toast.error("Failed to load history."));
+    return () => unsub();
+  }, [user, isAuthReady]);
+
+  // ─── Fetch My Created Classrooms (Teacher View) ──────────────────────────
+  useEffect(() => {
+    if (!isAuthReady || !user) { setMyClassrooms([]); return; }
+    setIsCroomsLoading(true);
+    const q = query(
+      collection(db, "classrooms"),
+      where("teacherId", "==", user.uid),
+      orderBy("timestamp", "desc")
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      setMyClassrooms(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setIsCroomsLoading(false);
+    }, (err) => {
+      console.error("Error fetching my classrooms:", err);
+      setIsCroomsLoading(false);
+    });
     return () => unsub();
   }, [user, isAuthReady]);
 
@@ -495,6 +516,12 @@ export default function App() {
               className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${activeTab === "classrooms" ? "bg-claude-terracotta text-white shadow-md" : "bg-white text-claude-olive-gray hover:bg-claude-warm-sand"}`}
             >
               <Users className="w-4 h-4 inline mr-2" /> Classrooms
+            </button>
+            <button
+              onClick={() => setActiveTab("map")}
+              className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${activeTab === "map" ? "bg-claude-terracotta text-white shadow-md" : "bg-white text-claude-olive-gray hover:bg-claude-warm-sand"}`}
+            >
+              <Globe className="w-4 h-4 inline mr-2" /> Knowledge Map
             </button>
           </nav>
         </header>
@@ -869,10 +896,14 @@ export default function App() {
         )}
 
         {activeTab === "classrooms" && (
-          <div className="max-w-4xl mx-auto space-y-12 animate-in fade-in duration-500">
+          <div className="max-w-4xl mx-auto space-y-12 animate-in fade-in duration-500 pb-20">
+            {/* Join Section */}
             <Card className="bg-claude-terracotta text-white border-none shadow-claude-whisper p-8 text-center overflow-hidden relative">
               <div className="relative z-10">
-                <h3 className="text-3xl font-serif mb-4">Enter Classroom Code</h3>
+                <h3 className="text-3xl font-serif mb-4 flex items-center justify-center gap-3">
+                  <GraduationCap className="w-8 h-8" />
+                  Enter Classroom Code
+                </h3>
                 <p className="opacity-80 mb-8 max-w-sm mx-auto text-sm">Join your teacher's session to instantly access the shared question bank for free.</p>
                 <div className="flex gap-3 max-w-sm mx-auto">
                    <Input 
@@ -889,29 +920,78 @@ export default function App() {
               <Users className="absolute -bottom-10 -right-10 w-48 h-48 opacity-10 rotate-12" />
             </Card>
 
-            <div className="space-y-6">
-              <h4 className="text-xl font-serif font-medium flex items-center gap-2">
-                <Users className="w-5 h-5 text-claude-terracotta" /> Recently Joined Classes
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {joinedClasses.map((bank, i) => (
-                  <div key={i} className="p-4 bg-white rounded-claude-xl border border-claude-border-cream flex justify-between items-center hover:bg-claude-warm-sand transition-colors cursor-pointer" onClick={() => { setResult(bank); setActiveTab("generator"); }}>
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-full bg-claude-parchment flex items-center justify-center font-bold text-claude-terracotta">
-                        {bank.topicDetected?.[0]}
+            {/* My Created Classrooms (Teacher Management) */}
+            <div className="space-y-8">
+              <div className="flex items-center justify-between">
+                <h2 className="text-3xl font-serif font-medium">Manage Your Classes</h2>
+                <Badge variant="outline" className="px-4 py-1.5 uppercase tracking-widest border-claude-terracotta text-claude-terracotta font-bold">Admin</Badge>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {isCroomsLoading ? (
+                   Array(2).fill(0).map((_, i) => <Card key={i} className="h-32 animate-pulse bg-claude-ivory border-none" />)
+                ) : myClassrooms.length > 0 ? (
+                  myClassrooms.map((cl, i) => (
+                    <Card key={i} className="bg-white border-claude-border-cream shadow-claude-ring rounded-claude-2xl p-6 group transition-all hover:shadow-claude-whisper">
+                      <div className="flex justify-between items-start mb-4">
+                        <div className="bg-claude-parchment p-2 rounded-xl">
+                          <Users className="w-6 h-6 text-claude-terracotta" />
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[10px] uppercase font-bold text-claude-stone-gray mb-1">Join Code</p>
+                          <code className="text-lg font-mono font-bold text-claude-terracotta bg-claude-parchment px-2 py-0.5 rounded border border-claude-border-cream">{cl.code}</code>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-bold text-sm">{bank.topicDetected}</p>
-                        <p className="text-[10px] text-claude-olive-gray uppercase font-bold tracking-widest">{bank.subject}</p>
+                      <h4 className="text-xl font-serif font-medium mb-1 truncate">{cl.topicDetected}</h4>
+                      <p className="text-xs text-claude-olive-gray mb-6">
+                        {cl.subject} · {cl.questions?.length || 0} Questions · <strong className="text-claude-terracotta">{cl.memberCount || 0} Students</strong>
+                      </p>
+                      
+                      <div className="flex gap-2">
+                        <Button variant="outline" className="flex-1 rounded-claude-md text-xs font-bold" onClick={() => { setTopic(cl.topicDetected); setActiveTab("generator"); setResult(cl); }}>
+                           VIEW CONTENT
+                        </Button>
+                        <Button variant="ghost" size="icon" className="text-claude-stone-gray hover:text-claude-crimson" onClick={() => toast.info("Delete feature coming soon!")}>
+                          <X className="w-4 h-4" />
+                        </Button>
                       </div>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-claude-stone-gray" />
+                    </Card>
+                  ))
+                ) : (
+                  <div className="col-span-full py-12 text-center rounded-claude-2xl border-2 border-dashed border-claude-border-cream bg-white/30">
+                    <p className="text-claude-olive-gray text-sm italic">You haven't created any classroom groups yet.</p>
                   </div>
-                ))}
+                )}
               </div>
             </div>
+
+            {/* Joined Classrooms (Student View) */}
+            {joinedClasses.length > 0 && (
+              <div className="pt-8 border-t border-claude-border-cream">
+                <h3 className="text-2xl font-serif font-medium mb-6">Recently Joined Classes</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {joinedClasses.map((bank, i) => (
+                    <Card key={i} className="bg-white border-claude-border-cream shadow-sm hover:shadow-claude-ring transition-all cursor-pointer p-5 flex justify-between items-center" onClick={() => { setResult(bank); setActiveTab("generator"); }}>
+                       <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 rounded-full bg-claude-parchment flex items-center justify-center font-bold text-claude-terracotta">
+                             {bank.topicDetected?.[0]}
+                          </div>
+                          <div>
+                             <h5 className="font-bold text-sm text-claude-near-black truncate max-w-[150px]">{bank.topicDetected}</h5>
+                             <p className="text-[10px] text-claude-olive-gray uppercase font-bold tracking-widest">{bank.subject}</p>
+                          </div>
+                       </div>
+                       <ChevronRight className="w-4 h-4 text-claude-stone-gray" />
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
+
+        {/* Knowledge Map */}
+        {activeTab === "map" && <GraphView />}
       </div>
 
 
