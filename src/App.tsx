@@ -12,7 +12,8 @@ import {
   ChevronRight,
   BookOpen,
   Layers,
-  LogOut
+  LogOut,
+  Crown
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -29,7 +30,7 @@ import { generateQuestionsPDF } from "@/src/lib/pdf";
 import { generateQuestionsDocx } from "@/src/lib/docx";
 import { auth, db, signInWithGoogle, logOut } from "@/src/lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
-import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, getDoc, setDoc } from "firebase/firestore";
 
 interface HistoryItem extends ScanResult {
   id?: string;
@@ -51,6 +52,8 @@ const EXAM_OPTIONS = [
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const [isPremium, setIsPremium] = useState(false);
+  const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [image, setImage] = useState<string | null>(null);
   const [topic, setTopic] = useState("");
   const [selectedExams, setSelectedExams] = useState<string[]>([]);
@@ -60,9 +63,32 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       setIsAuthReady(true);
+      
+      if (currentUser) {
+        // Check for Stripe success/cancel params
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('success') === 'true') {
+          toast.success("Payment successful! You are now a Premium member.", { duration: 5000 });
+          // Update Firestore profile (in a real app, use a Stripe Webhook)
+          await setDoc(doc(db, `users/${currentUser.uid}/profile`, 'data'), { isPremium: true }, { merge: true });
+          // Clean up URL
+          window.history.replaceState({}, document.title, window.location.pathname);
+        } else if (urlParams.get('canceled') === 'true') {
+          toast.error("Payment was canceled.");
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+
+        // Fetch premium status
+        const profileDoc = await getDoc(doc(db, `users/${currentUser.uid}/profile`, 'data'));
+        if (profileDoc.exists() && profileDoc.data().isPremium) {
+          setIsPremium(true);
+        }
+      } else {
+        setIsPremium(false);
+      }
     });
     return () => unsubscribe();
   }, []);
@@ -99,6 +125,27 @@ export default function App() {
 
     return () => unsubscribe();
   }, [user, isAuthReady]);
+
+  const handleUpgrade = async () => {
+    setIsCheckingOut(true);
+    try {
+      const response = await fetch('/api/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ returnUrl: window.location.origin + window.location.pathname })
+      });
+      const data = await response.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        toast.error(data.error || "Failed to initiate checkout");
+      }
+    } catch (err) {
+      toast.error("Error connecting to payment server");
+    } finally {
+      setIsCheckingOut(false);
+    }
+  };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -206,6 +253,21 @@ export default function App() {
       <div className="max-w-6xl mx-auto">
         <header className="mb-12 relative">
           <div className="absolute right-0 top-0 flex items-center gap-4">
+            {!isPremium && (
+              <Button 
+                onClick={handleUpgrade} 
+                disabled={isCheckingOut}
+                className="rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-500 hover:to-orange-600 text-white border-none shadow-md shadow-orange-200"
+              >
+                {isCheckingOut ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Crown className="w-4 h-4 mr-2" />}
+                Upgrade to Premium
+              </Button>
+            )}
+            {isPremium && (
+              <Badge className="bg-gradient-to-r from-amber-400 to-orange-500 text-white border-none shadow-sm px-3 py-1">
+                <Crown className="w-3 h-3 mr-1" /> Premium
+              </Badge>
+            )}
             <div className="text-sm font-medium text-gray-600 hidden sm:block">
               {user.email}
             </div>

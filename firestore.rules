@@ -57,5 +57,10 @@ service cloud.firestore {
       allow update: if false; // History items are immutable
       allow delete: if isOwner(userId);
     }
+
+    match /users/{userId}/profile {
+      allow read: if isOwner(userId);
+      allow write: if isOwner(userId); // Simplified for prototype: user can update their own premium status
+    }
   }
 }
