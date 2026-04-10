@@ -71,9 +71,8 @@ export default function App() {
         // Check for Stripe success/cancel params
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('success') === 'true') {
-          toast.success("Payment successful! You are now a Premium member.", { duration: 5000 });
-          // Update Firestore profile (in a real app, use a Stripe Webhook)
-          await setDoc(doc(db, `users/${currentUser.uid}/profile`, 'data'), { isPremium: true }, { merge: true });
+          toast.success("Payment successful! Your premium status will be updated in a moment.", { duration: 5000 });
+          // Note: isPremium is now securely updated via Stripe Webhook -> Firebase Admin
           // Clean up URL
           window.history.replaceState({}, document.title, window.location.pathname);
         } else if (urlParams.get('canceled') === 'true') {
@@ -133,7 +132,10 @@ export default function App() {
       const response = await fetch('/api/create-checkout-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ returnUrl: window.location.origin + window.location.pathname })
+        body: JSON.stringify({ 
+          returnUrl: window.location.origin + window.location.pathname,
+          userId: user?.uid 
+        })
       });
       const data = await response.json();
       if (data.url) {

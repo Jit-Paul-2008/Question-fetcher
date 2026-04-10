@@ -13,10 +13,6 @@ export default defineConfig(({mode}) => {
   return {
     plugins: [react()],
     define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(GEMINI_API_KEY),
-      'process.env.chem1': JSON.stringify(chem1),
-      'process.env.TAVILY_API_KEY': JSON.stringify(TAVILY_API_KEY),
-      'process.env.TRAVILY_API_KEY': JSON.stringify(TRAVILY_API_KEY),
       'process.env.NODE_ENV': JSON.stringify(mode),
     },
     resolve: {
