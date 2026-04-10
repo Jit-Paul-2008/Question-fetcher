@@ -1,0 +1,51 @@
+{
+  "entities": {
+    "HistoryItem": {
+      "title": "HistoryItem",
+      "description": "A past analysis result of a chemistry note.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The UID of the user who owns this history item."
+        },
+        "topicDetected": {
+          "type": "string",
+          "description": "The detected topic of the note."
+        },
+        "summary": {
+          "type": "string",
+          "description": "A summary of the note."
+        },
+        "keywords": {
+          "type": "array",
+          "description": "Keywords extracted from the note.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "questions": {
+          "type": "string",
+          "description": "JSON stringified array of generated questions."
+        },
+        "imageUrl": {
+          "type": "string",
+          "description": "URL of the uploaded image (stored in Firebase Storage or base64 if small)."
+        },
+        "timestamp": {
+          "type": "number",
+          "description": "Timestamp of when the analysis was performed."
+        }
+      },
+      "required": ["userId", "topicDetected", "summary", "keywords", "questions", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/history/{historyId}": {
+      "schema": {
+        "$ref": "#/entities/HistoryItem"
+      },
+      "description": "History items for a specific user."
+    }
+  }
+}

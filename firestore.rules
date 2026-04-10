@@ -1,0 +1,61 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: /users/{userId}/history
+    // Document ID: auto-generated
+    // Fields:
+    //   - userId: string (required, immutable) - The UID of the user
+    //   - topicDetected: string (required) - Detected topic
+    //   - summary: string (required) - Summary of the note
+    //   - keywords: list of strings (required) - Extracted keywords
+    //   - questions: string (required) - JSON stringified questions
+    //   - imageUrl: string (optional) - URL of the image
+    //   - timestamp: number (required, immutable) - Time of analysis
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+    
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+    
+    function isValidHistoryItem(data, userId) {
+      return hasRequiredFields(['userId', 'topicDetected', 'summary', 'keywords', 'questions', 'timestamp']) &&
+             hasOnlyAllowedFields(['userId', 'topicDetected', 'summary', 'keywords', 'questions', 'imageUrl', 'timestamp']) &&
+             data.userId == userId &&
+             data.topicDetected is string && data.topicDetected.size() > 0 && data.topicDetected.size() < 500 &&
+             data.summary is string && data.summary.size() > 0 && data.summary.size() < 5000 &&
+             data.keywords is list && data.keywords.size() <= 50 &&
+             data.questions is string && data.questions.size() < 1000000 &&
+             (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() < 2000000)) &&
+             data.timestamp is number;
+    }
+
+    match /users/{userId}/history/{historyId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidHistoryItem(request.resource.data, userId);
+      allow update: if false; // History items are immutable
+      allow delete: if isOwner(userId);
+    }
+  }
+}
