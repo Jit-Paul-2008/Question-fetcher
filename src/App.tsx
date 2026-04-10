@@ -1,8 +1,8 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   Upload, Search, FileText, Download, CheckCircle2,
-  Loader2, Camera, X, ChevronRight, BookOpen, Layers,
-  LogOut, Coins, ShoppingCart, FlaskConical, FileBox,
+  Loader2, X, ChevronRight, BookOpen, Layers,
+  LogOut, Coins, FlaskConical, FileBox,
   Globe, Users, GraduationCap, Share2, Sparkles,
 } from "lucide-react";
 
@@ -20,9 +20,10 @@ import { scanSubjectNote, ScanResult } from "@/src/lib/gemini";
 import { generateQuestionsPDF } from "@/src/lib/pdf";
 import GraphView from "./GraphView";
 import { generateQuestionsDocx } from "@/src/lib/docx";
-import { auth, db, signInWithGoogle, logOut } from "@/src/lib/firebase";
+import { auth, db, logOut } from "@/src/lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { collection, addDoc, onSnapshot, query, orderBy, doc, getDoc, setDoc, where } from "firebase/firestore";
+import { motion, AnimatePresence } from "framer-motion";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -47,7 +48,6 @@ const SUBJECTS = [
   { group: "Humanities", items: ["History", "Geography", "Political Science", "Sociology", "Psychology", "Philosophy"] },
   { group: "Languages", items: ["English", "Hindi", "Sanskrit", "Bengali"] },
 ];
-const ALL_SUBJECTS = SUBJECTS.flatMap(g => g.items);
 
 interface CreditPack {
   credits: number;
@@ -101,8 +101,7 @@ export default function App() {
   const getTopicsCount = (str: string) => str.split(/[,|\n]+/).map(t => t.trim()).filter(t => t.length > 0).length;
   const topicsCount = getTopicsCount(topic);
 
-
-  // ─── Fetch public config (Razorpay key, packs) ──────────────────────────
+  // ─── Fetch public config ──────────────────────────────────────────────────
   useEffect(() => {
     fetch("/api/config")
       .then(r => r.json())
@@ -118,27 +117,16 @@ export default function App() {
     const unsub = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       setIsAuthReady(true);
-
       if (currentUser) {
-        const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.get("canceled") === "true") {
-          toast.error("Payment was canceled.");
-          window.history.replaceState({}, document.title, window.location.pathname);
-        }
-
         const profileRef = doc(db, `users/${currentUser.uid}/profile`, "data");
         const profileDoc = await getDoc(profileRef);
-
-        const data = profileDoc.exists() ? profileDoc.data() : null;
-
-        if (data && typeof data.credits === "number") {
-          setCredits(data.credits);
+        if (profileDoc.exists()) {
+          setCredits(profileDoc.data().credits || 0);
         } else {
-          // First time initialized or missing credit field → grant free welcome credits
           const freeCredits = 3;
           await setDoc(profileRef, { credits: freeCredits }, { merge: true });
           setCredits(freeCredits);
-          toast.success(`Welcome! You have ${freeCredits} free scans to get started.`, { duration: 5000 });
+          toast.success(`Welcome! You have ${freeCredits} free scans.`, { duration: 5000 });
         }
       } else {
         setCredits(0);
@@ -147,46 +135,29 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // ─── History listener ─────────────────────────────────────────────────────
+  // ─── Listeners ────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!isAuthReady || !user) { setHistory([]); return; }
     const q = query(collection(db, `users/${user.uid}/history`), orderBy("timestamp", "desc"));
-    const unsub = onSnapshot(q, (snap) => {
-      setHistory(snap.docs.map(d => {
-        const data = d.data();
-        return {
-          id: d.id,
-          topicDetected: data.topicDetected,
-          summary: data.summary,
-          keywords: data.keywords,
-          questions: JSON.parse(data.questions),
-          timestamp: data.timestamp,
-        } as HistoryItem;
-      }));
-    }, () => toast.error("Failed to load history."));
-    return () => unsub();
+    return onSnapshot(q, (snap) => {
+      setHistory(snap.docs.map(d => ({
+        id: d.id,
+        ...d.data(),
+        questions: JSON.parse(d.data().questions)
+      } as HistoryItem)));
+    });
   }, [user, isAuthReady]);
 
-  // ─── Fetch My Created Classrooms (Teacher View) ──────────────────────────
   useEffect(() => {
     if (!isAuthReady || !user) { setMyClassrooms([]); return; }
     setIsCroomsLoading(true);
-    const q = query(
-      collection(db, "classrooms"),
-      where("teacherId", "==", user.uid),
-      orderBy("timestamp", "desc")
-    );
-    const unsub = onSnapshot(q, (snap) => {
+    const q = query(collection(db, "classrooms"), where("teacherId", "==", user.uid), orderBy("timestamp", "desc"));
+    return onSnapshot(q, (snap) => {
       setMyClassrooms(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       setIsCroomsLoading(false);
-    }, (err) => {
-      console.error("Error fetching my classrooms:", err);
-      setIsCroomsLoading(false);
     });
-    return () => unsub();
   }, [user, isAuthReady]);
 
-  // ─── Library/Classroom Local Storage ──────────────────────────────────────
   useEffect(() => {
     const saved = localStorage.getItem("joined_classes");
     if (saved) setJoinedClasses(JSON.parse(saved));
@@ -210,107 +181,50 @@ export default function App() {
     if (activeTab === "library") fetchLibrary();
   }, [activeTab]);
 
-
-  // ─── File upload (Images, PDF, DOCX) ─────────────────────────────────────
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // ─── Logic ────────────────────────────────────────────────────────────────
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
-    const remaining = MAX_IMAGES - images.length;
-    if (remaining <= 0) {
-      toast.error(`Maximum ${MAX_IMAGES} files per scan.`);
-      return;
-    }
-    Array.from(files).slice(0, remaining).forEach((file: File) => {
+    Array.from(files).forEach(file => {
       const reader = new FileReader();
-      reader.onloadend = () => setImages(prev => [...prev, reader.result as string]);
+      reader.onloadend = () => setImages(prev => [...prev, reader.result as string].slice(0, MAX_IMAGES));
       reader.readAsDataURL(file);
     });
-    if (files.length > remaining) {
-      toast.warning(`Only ${remaining} more file(s) added. Maximum is ${MAX_IMAGES}.`);
-    }
-    e.target.value = "";
   };
 
-  const removeImage = (idx: number) => setImages(prev => prev.filter((_, i) => i !== idx));
-
-  const toggleExam = (examId: string) => {
-    setSelectedExams(prev =>
-      prev.includes(examId) ? prev.filter(id => id !== examId) : [...prev, examId]
-    );
-  };
-
-  // ─── Scan ─────────────────────────────────────────────────────────────────
-  const startScan = async () => {
-    if (scanMode === "notes" && images.length === 0) {
-      toast.error("Please upload at least one image or document.");
-      return;
-    }
-    if (!topic || topic.trim() === "") {
-      toast.error("Please enter at least one topic.");
-      return;
-    }
-    if (topicsCount > MAX_TOPICS) {
-      toast.error(`Please limit your scan to ${MAX_TOPICS} topics at a time.`);
-      return;
-    }
-    if (selectedExams.length === 0) {
-      toast.error("Please select at least one target exam.");
-      return;
-    }
+  const handleScan = async () => {
     if (credits <= 0) { setShowBuyModal(true); return; }
-
     setIsScanning(true);
     try {
       const idToken = await user!.getIdToken();
-      // In topics mode, we send empty images array to trigger text-only analysis
-      const scanImages = scanMode === "notes" ? images : [];
-      const scanResult = await scanSubjectNote(scanImages, topic, subject, selectedExams, idToken);
-
-      // Credit was deducted server-side atomically — update local UI
-      setCredits(prev => Math.max(0, prev - 1));
+      const scanResult = await scanSubjectNote(scanMode === "notes" ? images : [], topic, subject, selectedExams, idToken);
       setResult(scanResult);
-
-      // Save text-only history to Firestore (no images stored)
-      if (user) {
-        try {
-          await addDoc(collection(db, `users/${user.uid}/history`), {
-            userId: user.uid,
-            topicDetected: scanResult.topicDetected,
-            summary: scanResult.summary,
-            keywords: scanResult.keywords,
-            questions: JSON.stringify(scanResult.questions),
-            timestamp: Date.now(),
-          });
-        } catch { /* non-critical */ }
-      }
-
-      toast.success("Scan completed! Question bank ready.");
+      setCredits(prev => prev - 1);
+      await addDoc(collection(db, `users/${user!.uid}/history`), {
+        topicDetected: scanResult.topicDetected,
+        summary: scanResult.summary,
+        keywords: scanResult.keywords,
+        questions: JSON.stringify(scanResult.questions),
+        timestamp: Date.now(),
+      });
+      toast.success("Extraction complete!");
     } catch (err: any) {
-      if (err.message?.includes("Insufficient credits")) {
-        setCredits(0);
-        setShowBuyModal(true);
-        toast.error("No credits left. Please buy a pack to continue.");
-      } else {
-        toast.error(err.message || "Scan failed. Please try again.");
-      }
-      // Note: server auto-refunds credit if scan failed after deduction
-    } finally {
-      setIsScanning(false);
-    }
+      toast.error(err.message || "Scan failed.");
+    } finally { setIsScanning(false); }
   };
 
   const publishToLibrary = async (bank: ScanResult) => {
     if (!user) return;
+    const isAnon = confirm("Publish as Anonymous? Cancel to show your name.");
     try {
       const idToken = await user.getIdToken();
-      const res = await fetch("/api/publish", {
+      await fetch("/api/publish", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${idToken}` },
-        body: JSON.stringify({ bank }),
+        body: JSON.stringify({ bank: { ...bank, authorName: isAnon ? "Anonymous" : user.displayName || "Admin" } }),
       });
-      if (res.ok) toast.success("Success! Your question bank is now live in the Library.");
-      else toast.error("Failed to publish.");
-    } catch { toast.error("Error publishing."); }
+      toast.success("Live in global library!");
+    } catch { toast.error("Failed to publish."); }
   };
 
   const createClassroom = async (bank: ScanResult) => {
@@ -324,11 +238,10 @@ export default function App() {
       });
       const data = await res.json();
       if (data.code) {
-        toast.success(`Classroom Created! Code: ${data.code}`, { duration: 10000 });
-        // Auto copy to clipboard
+        toast.success(`Classroom Code: ${data.code}`);
         navigator.clipboard.writeText(data.code);
       }
-    } catch { toast.error("Error creating classroom."); }
+    } catch { toast.error("Error creating class."); }
   };
 
   const joinClassroom = async () => {
@@ -346,707 +259,309 @@ export default function App() {
         setJoinedClasses(prev => [data, ...prev.filter(c => c.topicDetected !== data.topicDetected)]);
         setResult(data);
         setActiveTab("generator");
-        // Subtle celebration
-        toast.success("Joined Classroom! Success 🎉", { 
-          icon: <Sparkles className="w-5 h-5 text-amber-500 animate-bounce" />,
-          duration: 4000 
-        });
-      } else {
-        toast.error(data.error || "Invalid code.");
+        toast.success("Enrolled successfully!");
       }
-    } catch { toast.error("Error joining classroom."); }
+    } catch { toast.error("Error joining."); }
     finally { setIsJoining(false); setClassroomCode(""); }
   };
 
-
-  // ─── Razorpay checkout ────────────────────────────────────────────────────
   const handleBuyCredits = async (packId: string) => {
-    if (!user) { toast.error("Please sign in first"); return; }
+    if (!user) return;
     setIsBuying(packId);
     try {
       await loadRazorpayScript();
-
       const orderRes = await fetch("/api/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ packId, uid: user.uid }),
       });
       const { orderId, amount, currency } = await orderRes.json();
-
       const idToken = await user.getIdToken();
-
       const options = {
         key: razorpayKeyId,
-        amount,
-        currency,
-        order_id: orderId,
-        name: "ChemScan",
-        description: creditPacks[packId]?.name || "Credit Pack",
-        image: "/favicon.ico",
-        config: {
-          display: {
-            blocks: {
-              upi: {
-                name: "Pay via UPI or QR",
-                instruments: [{ method: "upi" }],
-              },
-            },
-            sequence: ["block.upi"],
-            preferences: { show_default_blocks: true },
-          },
-        },
+        amount, currency, order_id: orderId, name: "ChemScan",
         handler: async (response: any) => {
-          try {
-            const verifyRes = await fetch("/api/verify-payment", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${idToken}`,
-              },
-              body: JSON.stringify({
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
-                packId,
-              }),
-            });
-            const result = await verifyRes.json();
-            if (result.success) {
-              setCredits(prev => prev + result.creditsAdded);
-              setShowBuyModal(false);
-              toast.success(`✅ ${result.creditsAdded} credits added! Happy scanning.`, { duration: 5000 });
-            } else {
-              toast.error("Payment verification failed. Contact support.");
-            }
-          } catch {
-            toast.error("Failed to verify payment. Contact support if amount was deducted.");
+          const verifyRes = await fetch("/api/verify-payment", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${idToken}` },
+            body: JSON.stringify({ ...response, packId }),
+          });
+          const resJson = await verifyRes.json();
+          if (resJson.success) {
+            setCredits(prev => prev + resJson.creditsAdded);
+            setShowBuyModal(false);
+            toast.success("Credits added!");
           }
         },
-        theme: { color: "#2563EB" },
-        modal: { ondismiss: () => setIsBuying(null) },
+        theme: { color: "#E05D44" },
       };
-
-
       new (window as any).Razorpay(options).open();
-    } catch (err: any) {
-      toast.error(err.message || "Payment failed");
-      setIsBuying(null);
-    }
+    } catch { toast.error("Payment failed."); }
+    finally { setIsBuying(null); }
   };
 
-  // ─── Render: Loading ─────────────────────────────────────────────────────
-  if (!isAuthReady) {
-    return (
-      <div className="min-h-screen bg-[#F5F5F7] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-      </div>
-    );
-  }
+  if (!isAuthReady) return <div className="h-screen flex items-center justify-center bg-claude-parchment"><Loader2 className="animate-spin" /></div>;
 
-  // ─── Render: Sign In ─────────────────────────────────────────────────────
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-claude-parchment flex flex-col items-center justify-center p-4">
-        <div className="w-20 h-20 rounded-claude-3xl bg-claude-terracotta text-claude-ivory flex items-center justify-center mb-8 shadow-claude-whisper">
-          <FlaskConical className="w-10 h-10" />
-        </div>
-        <h1 className="text-5xl font-serif font-medium tracking-tight mb-2 text-center text-claude-near-black">ChemScan</h1>
-        <p className="text-lg text-claude-olive-gray mb-1 text-center font-sans">AI-powered question bank generator</p>
-        <p className="text-sm text-claude-terracotta font-medium mb-8 text-center uppercase tracking-widest">Physics · Chemistry · Biology · Maths</p>
-        <Button
-          onClick={() => signInWithGoogle().catch(console.error)}
-          variant="warm-sand"
-          className="h-14 px-10 rounded-claude-lg border border-claude-border-cream shadow-claude-ring font-semibold text-lg"
-        >
-          <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24">
-            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-          </svg>
-          Sign in with Google — get 3 free scans
-        </Button>
+  if (!user) return (
+    <div className="h-screen flex flex-col items-center justify-center bg-claude-parchment p-8 text-center">
+      <div className="w-20 h-20 rounded-claude-3xl bg-claude-terracotta text-white flex items-center justify-center mb-8 shadow-xl">
+        <FlaskConical className="w-10 h-10" />
       </div>
-    );
-  }
+      <h1 className="text-5xl font-serif font-medium mb-4">ChemScan Pro Max</h1>
+      <p className="text-claude-olive-gray mb-10 max-w-sm">Elevate your academic strategy with AI-driven intelligence.</p>
+      <Button onClick={() => (window as any).signInWithGoogle()} className="h-14 px-10 bg-claude-terracotta text-white rounded-claude-xl">Sign in with Google</Button>
+    </div>
+  );
 
-  // ─── Render: Main App ─────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-claude-parchment text-claude-near-black font-sans p-4 md:p-12">
+    <div className="min-h-screen bg-claude-parchment text-claude-near-black font-sans p-4 md:p-12 relative overflow-x-hidden">
       <div className="max-w-6xl mx-auto">
-
-        {/* Header */}
-        <header className="mb-16 relative text-center">
-          <div className="absolute right-0 top-0 flex items-center gap-3">
-            {/* Credit balance */}
-            <button
-              onClick={() => setShowBuyModal(true)}
-              className="flex items-center gap-1.5 bg-claude-ivory border border-claude-border-cream rounded-claude-lg px-4 py-2 text-sm font-semibold shadow-claude-ring hover:bg-claude-warm-sand transition-colors"
-            >
-              <Coins className="w-4 h-4 text-amber-500" />
-              <span className={credits === 0 ? "text-claude-crimson" : "text-claude-near-black"}>{credits} credits</span>
-            </button>
-            <Button variant="ghost" size="sm" onClick={() => logOut()} className="rounded-claude-md text-claude-olive-gray hover:text-claude-near-black">
-              <LogOut className="w-4 h-4 mr-2" />Sign Out
-            </Button>
+        <header className="mb-20 text-center relative">
+          <div className="absolute top-0 right-0 flex items-center gap-4">
+             <button onClick={() => setShowBuyModal(true)} className="bg-white border border-claude-border-cream px-4 py-2 rounded-claude-lg shadow-sm flex items-center gap-2 hover:bg-claude-ivory transition-colors">
+                <Coins className="w-4 h-4 text-amber-500" />
+                <span className="font-bold text-sm">{credits} Credits</span>
+             </button>
+             <Button variant="ghost" size="sm" onClick={() => logOut()} className="text-claude-stone-gray"><LogOut className="w-4 h-4" /></Button>
           </div>
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-claude-2xl bg-claude-terracotta text-claude-ivory mb-6 shadow-claude-whisper">
+          <div className="inline-flex w-16 h-16 bg-claude-terracotta text-white rounded-claude-2xl items-center justify-center mb-6 shadow-claude-whisper">
             <FlaskConical className="w-8 h-8" />
           </div>
-          <h1 className="text-5xl md:text-6xl font-serif font-medium tracking-tight mb-4">ChemScan</h1>
-          <p className="text-xl text-claude-olive-gray max-w-2xl mx-auto leading-relaxed">
-            Extract high-quality questions for JEE, NEET & Boards in seconds.
-          </p>
-
-          <nav className="flex items-center justify-center gap-4 mt-8">
-            <button
-              onClick={() => setActiveTab("generator")}
-              className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${activeTab === "generator" ? "bg-claude-terracotta text-white shadow-md" : "bg-white text-claude-olive-gray hover:bg-claude-warm-sand"}`}
-            >
-              <Search className="w-4 h-4 inline mr-2" /> Generator
-            </button>
-            <button
-              onClick={() => setActiveTab("library")}
-              className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${activeTab === "library" ? "bg-claude-terracotta text-white shadow-md" : "bg-white text-claude-olive-gray hover:bg-claude-warm-sand"}`}
-            >
-              <Globe className="w-4 h-4 inline mr-2" /> Library
-            </button>
-            <button
-              onClick={() => setActiveTab("classrooms")}
-              className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${activeTab === "classrooms" ? "bg-claude-terracotta text-white shadow-md" : "bg-white text-claude-olive-gray hover:bg-claude-warm-sand"}`}
-            >
-              <Users className="w-4 h-4 inline mr-2" /> Classrooms
-            </button>
-            <button
-              onClick={() => setActiveTab("map")}
-              className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${activeTab === "map" ? "bg-claude-terracotta text-white shadow-md" : "bg-white text-claude-olive-gray hover:bg-claude-warm-sand"}`}
-            >
-              <Globe className="w-4 h-4 inline mr-2" /> Knowledge Map
-            </button>
+          <h1 className="text-6xl font-serif font-medium tracking-tight mb-4">ChemScan</h1>
+          <nav className="flex justify-center gap-4 mt-12 bg-white/40 p-1.5 rounded-full inline-flex border border-claude-border-cream">
+            {["generator", "library", "classrooms", "map"].map(t => (
+              <button
+                key={t}
+                onClick={() => setActiveTab(t as any)}
+                className={`px-8 py-2.5 rounded-full text-xs font-bold uppercase tracking-widest transition-all ${activeTab === t ? "bg-claude-terracotta text-white shadow-md" : "text-claude-stone-gray hover:text-claude-near-black"}`}
+              >
+                {t}
+              </button>
+            ))}
           </nav>
         </header>
 
-        {activeTab === "generator" && (
-          <>
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-
-
-          {/* Left: Upload Panel */}
-          <div className="lg:col-span-5 space-y-8">
-            <Card className="border-none shadow-claude-whisper bg-claude-ivory rounded-claude-2xl overflow-hidden p-2">
-              <CardHeader className="pb-4">
-                <div className="flex bg-claude-parchment p-1 rounded-claude-xl mb-6">
-                  <button
-                    onClick={() => setScanMode("notes")}
-                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-claude-lg text-xs font-bold transition-all ${scanMode === "notes" ? "bg-white text-claude-terracotta shadow-sm" : "text-claude-stone-gray hover:text-claude-near-black"}`}
-                  >
-                    <Upload className="w-4 h-4" />
-                    Scan Notes
-                  </button>
-                  <button
-                    onClick={() => { setScanMode("topics"); setImages([]); }}
-                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-claude-lg text-xs font-bold transition-all ${scanMode === "topics" ? "bg-white text-claude-terracotta shadow-sm" : "text-claude-stone-gray hover:text-claude-near-black"}`}
-                  >
-                    <Search className="w-4 h-4" />
-                    Search Topics
-                  </button>
-                </div>
-                <CardTitle className="flex items-center gap-3 text-2xl">
-                  {scanMode === "notes" ? <FileText className="w-6 h-6 text-claude-terracotta" /> : <BookOpen className="w-6 h-6 text-claude-terracotta" />}
-                  {scanMode === "notes" ? "Upload Notes" : "Topic Search"}
-                </CardTitle>
-                <CardDescription className="text-claude-olive-gray">
-                  {scanMode === "notes" ? `Extract questions from your images/PDFs` : `Find questions based on chapters only`}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-5">
-
-                {/* Image drop zone */}
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  className={`relative rounded-claude-xl border-2 border-dashed transition-all cursor-pointer flex flex-col items-center justify-center p-8 ${images.length > 0 ? "border-claude-terracotta bg-claude-parchment/50" : "border-claude-border-cream hover:border-claude-terracotta hover:bg-claude-parchment/30"
-                    }`}
-                >
-                  {images.length > 0 ? (
-                    <div className="w-full space-y-3">
-                      <div className="flex flex-wrap gap-2 justify-center">
-                        {images.map((fileData, idx) => {
-                          const isImage = fileData.startsWith("data:image/");
-                          const isPDF = fileData.startsWith("data:application/pdf");
-
-                          return (
-                            <div key={idx} className="relative group">
-                              {isImage ? (
-                                <img src={fileData} alt={`File ${idx + 1}`} className="w-16 h-16 object-cover rounded-lg border border-gray-200" />
-                              ) : (
-                                <div className={`w-16 h-16 flex flex-col items-center justify-center rounded-lg border border-gray-200 ${isPDF ? "bg-red-50" : "bg-blue-50"}`}>
-                                  {isPDF ? <FileText className="w-8 h-8 text-red-500" /> : <FileBox className="w-8 h-8 text-blue-500" />}
-                                  <span className="text-[8px] font-bold mt-1 uppercase text-gray-500">{isPDF ? "PDF" : "DOCX"}</span>
-                                </div>
-                              )}
-                              <button
-                                onClick={(e) => { e.stopPropagation(); removeImage(idx); }}
-                                className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
-                            </div>
-                          );
-                        })}
+        <AnimatePresence mode="wait">
+          {activeTab === "generator" && (
+            <motion.div key="gen" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.4 }}>
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+                <div className="lg:col-span-5 space-y-8">
+                  <Card className="border-none shadow-claude-ring bg-claude-ivory rounded-claude-3xl overflow-hidden">
+                    <CardHeader className="p-8 pb-4">
+                      <div className="flex bg-claude-parchment p-1 rounded-claude-xl mb-6">
+                        <button onClick={() => setScanMode("notes")} className={`flex-1 py-3 px-4 rounded-claude-lg text-[10px] font-bold uppercase tracking-widest ${scanMode === "notes" ? "bg-white text-claude-terracotta shadow-sm" : "text-claude-stone-gray"}`}>Notes Mode</button>
+                        <button onClick={() => setScanMode("topics")} className={`flex-1 py-3 px-4 rounded-claude-lg text-[10px] font-bold uppercase tracking-widest ${scanMode === "topics" ? "bg-white text-claude-terracotta shadow-sm" : "text-claude-stone-gray"}`}>Topic Mode</button>
                       </div>
-                      <p className="text-xs text-center text-blue-600 font-medium">
-                        {images.length}/{MAX_IMAGES} files — click to add more
-                      </p>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-3">
-                        <Upload className="w-6 h-6 text-gray-400" />
-                      </div>
-                      <p className="text-sm font-medium text-gray-600">Click to upload or drag & drop</p>
-                      <p className="text-xs text-gray-400 mt-1">Images, PDF or DOCX — select multiple files at once</p>
-                    </>
-                  )}
-                  <input
-                    type="file" ref={fileInputRef} onChange={handleFileUpload}
-                    className="hidden" accept="image/*,.pdf,.docx" multiple
-                  />
-                </div>
-
-                {/* Subject selector */}
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold">Subject</Label>
-                  <select
-                    value={subject}
-                    onChange={e => setSubject(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    {SUBJECTS.map(group => (
-                      <optgroup key={group.group} label={group.group}>
-                        {group.items.map(s => (
-                          <option key={s} value={s}>{s}</option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Topic input */}
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <Label htmlFor="topic" className="text-sm font-semibold">
-                      {scanMode === "notes" ? "Chapter/Topic Reference" : "Target Topics (Max 5)"}
-                    </Label>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${topicsCount > MAX_TOPICS ? "bg-red-100 text-red-600" : "bg-gray-100 text-gray-400"}`}>
-                      {topicsCount}/{MAX_TOPICS} topics
-                    </span>
-                  </div>
-                  <Input
-                    id="topic"
-                    placeholder={scanMode === "notes"
-                      ? `e.g. ${subject === "Physics" ? "Electrostatics, Work Energy" : "Organic Chemistry"} ...`
-                      : "Enter up to 5 topics separated by commas..."
-                    }
-                    value={topic}
-                    onChange={e => setTopic(e.target.value)}
-                    className={`rounded-xl border-gray-200 focus:ring-blue-500 ${topicsCount > MAX_TOPICS ? "border-red-300 ring-1 ring-red-300" : ""}`}
-                  />
-                  {topicsCount > MAX_TOPICS && (
-                    <p className="text-[10px] text-red-500 font-bold mt-1">Please remove {topicsCount - MAX_TOPICS} topic(s) to continue.</p>
-                  )}
-                </div>
-
-                {/* Exam selector */}
-                <div className="space-y-3">
-                  <Label className="text-sm font-semibold">Target Exams</Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {EXAM_OPTIONS.map(exam => (
-                      <div key={exam.id} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={exam.id}
-                          checked={selectedExams.includes(exam.id)}
-                          onCheckedChange={() => toggleExam(exam.id)}
-                        />
-                        <label htmlFor={exam.id} className="text-xs font-medium leading-none cursor-pointer">
-                          {exam.label}
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Scan button */}
-                <Button
-                  onClick={startScan}
-                  disabled={isScanning || (scanMode === "notes" && images.length === 0) || topicsCount > MAX_TOPICS || !topic.trim()}
-                  variant="terracotta"
-                  className="w-full h-14 rounded-claude-lg font-bold text-base transition-all shadow-claude-whisper disabled:opacity-50"
-                >
-                  {isScanning ? (
-                    <><Loader2 className="w-5 h-5 mr-3 animate-spin" />Analyzing...</>
-                  ) : credits <= 0 ? (
-                    <><ShoppingCart className="w-5 h-5 mr-3" />Buy Credits to Scan</>
-                  ) : (
-                    <><Search className="w-5 h-5 mr-3" />{scanMode === "notes" ? "Generate Question Bank" : "Generate from Topics"}</>
-                  )}
-                </Button>
-
-                {credits <= 0 && (
-                  <p className="text-xs text-center text-red-500">No credits remaining. <button onClick={() => setShowBuyModal(true)} className="underline font-semibold">Buy a pack →</button></p>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Right: Results Panel */}
-          <div className="lg:col-span-7">
-            {result ? (
-              <div className="space-y-8">
-                <Card className="border-none shadow-claude-whisper bg-claude-ivory rounded-claude-2xl overflow-hidden p-2">
-                  <CardHeader className="pb-4">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-1">
-                        <CardTitle className="text-2xl flex items-center gap-2">
-                          <CheckCircle2 className="w-6 h-6 text-green-500" />
-                          Question Bank Ready
-                        </CardTitle>
-                        <CardDescription className="text-claude-olive-gray">
-                          <span className="font-bold text-claude-terracotta">{subject}</span> · {result.topicDetected}
-                        </CardDescription>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button variant="ghost" size="sm" className="rounded-claude-md text-blue-600 hover:text-blue-700" onClick={() => publishToLibrary(result)}>
-                          <Share2 className="w-4 h-4 mr-2" />Publish
-                        </Button>
-                        <Button variant="ghost" size="sm" className="rounded-claude-md text-amber-600 hover:text-amber-700" onClick={() => createClassroom(result)}>
-                          <GraduationCap className="w-4 h-4 mr-2" />Class Code
-                        </Button>
-                        <Separator orientation="vertical" className="h-8 mx-2" />
-                        <Button variant="warm-sand" size="sm" className="rounded-claude-md"
-                          onClick={() => generateQuestionsPDF(result.topicDetected, result.questions, subject)}>
-                          <Download className="w-4 h-4 mr-2" />PDF
-                        </Button>
-                      </div>
-                    </div>
-                    { (result as any).isPopular && (
-                      <Badge className="bg-amber-100 text-amber-700 border-none animate-pulse">
-                        <Sparkles className="w-3 h-3 mr-1" /> Popular Question Bank
-                      </Badge>
-                    )}
-
-                  </CardHeader>
-                  <CardContent className="space-y-8">
-                    <div className="p-6 rounded-claude-xl bg-claude-parchment/60 border border-claude-border-cream">
-                      <h4 className="text-sm font-bold text-claude-near-black mb-2 flex items-center gap-2 uppercase tracking-widest">
-                        <BookOpen className="w-4 h-4 text-claude-terracotta" />Summary
-                      </h4>
-                      <p className="text-base text-claude-olive-gray leading-relaxed font-serif">{result.summary}</p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {result.keywords.map((kw, i) => (
-                        <Badge key={i} variant="secondary" className="bg-claude-warm-sand/50 border-claude-border-cream text-claude-olive-gray px-3 py-1 rounded-full text-[10px] uppercase tracking-wider font-bold">
-                          {kw}
-                        </Badge>
-                      ))}
-                    </div>
-                    <Separator className="bg-claude-border-cream" />
-                    <div className="space-y-6">
-                      <h4 className="text-xl font-serif font-medium flex items-center gap-3">
-                        <Layers className="w-6 h-6 text-claude-terracotta" />
-                        {result.questions.length} Questions Found
-                      </h4>
-                      <ScrollArea className="h-[500px] pr-4">
-                        <div className="space-y-6">
-                          {result.questions.map((q, i) => (
-                            <div key={i} className="p-6 rounded-claude-xl bg-white border border-claude-border-cream shadow-claude-ring hover:shadow-claude-whisper transition-all duration-300">
-                              <div className="flex items-start justify-between mb-4">
-                                <Badge className={`border-none rounded-claude-sm text-[10px] font-bold px-2 py-0.5 ${q.type === "PYQ" ? "bg-purple-100 text-purple-700" :
-                                  q.type === "HOTS" ? "bg-orange-100 text-orange-700" :
-                                    q.type === "Sample Paper" ? "bg-green-100 text-green-700" :
-                                      "bg-claude-warm-sand text-claude-olive-gray"
-                                  }`}>
-                                  {q.type}
-                                </Badge>
-                                <span className="text-[10px] font-bold text-claude-stone-gray uppercase tracking-widest">{q.year}</span>
-                              </div>
-                              <p className="text-base text-claude-near-black font-medium leading-relaxed mb-4 font-serif">{q.text}</p>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5">
-                                {q.options.map((opt, optIdx) => (
-                                  <div key={optIdx} className="flex items-center gap-3 p-3 rounded-claude-md bg-claude-parchment/30 border border-claude-border-cream text-sm text-claude-olive-gray">
-                                    <span className="font-bold text-claude-terracotta">{String.fromCharCode(65 + optIdx)}.</span>
-                                    {opt}
-                                  </div>
-                                ))}
-                              </div>
-                              <details className="mb-4 group/ans">
-                                <summary className="text-xs font-bold text-claude-terracotta cursor-pointer hover:underline list-none flex items-center gap-1">
-                                  <ChevronRight className="w-3.5 h-3.5 transition-transform group-open/ans:rotate-90" />
-                                  Reveal Answer Key
-                                </summary>
-                                <div className="mt-3 p-4 bg-green-50 rounded-claude-md border border-green-100 text-sm font-bold text-green-800">
-                                  Answer: {q.answer}
-                                </div>
-                              </details>
-                              <div className="flex items-center gap-3">
-                                <div className="w-2 h-2 rounded-full bg-claude-terracotta/40" />
-                                <span className="text-xs text-claude-stone-gray font-medium">{q.topic}</span>
-                                <Separator orientation="vertical" className="h-3 bg-claude-border-cream" />
-                                <span className="text-xs text-claude-stone-gray font-medium truncate max-w-[250px]">{q.source}</span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </ScrollArea>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            ) : (
-              <div className="h-full min-h-[500px] flex flex-col items-center justify-center text-center p-12 rounded-claude-2xl border-2 border-dashed border-claude-border-cream bg-claude-ivory/50">
-                <div className="w-24 h-24 rounded-claude-3xl bg-claude-parchment flex items-center justify-center mb-8 shadow-claude-ring">
-                  <FileText className="w-10 h-10 text-claude-stone-gray/50" />
-                </div>
-                <h3 className="text-3xl font-serif font-medium text-claude-stone-gray mb-3">No Analysis Yet</h3>
-                <p className="text-claude-olive-gray max-w-sm leading-relaxed">
-                  Upload your {subject} notes or select topics to generate a comprehensive question bank.
-                </p>
-                {credits > 0 && (
-                  <p className="text-sm text-claude-terracotta mt-6 font-bold uppercase tracking-widest">{credits} scan{credits !== 1 ? "s" : ""} remaining</p>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* History */}
-        {history.length > 0 && (
-          <div className="mt-20 border-t border-claude-border-cream pt-16">
-            <h2 className="text-3xl font-serif font-medium mb-10 text-claude-near-black">Consult Past Analyses</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {history.map((item, i) => (
-                <details key={i} className="group bg-claude-ivory rounded-claude-xl border border-claude-border-cream shadow-sm hover:shadow-claude-ring transition-all duration-300 overflow-hidden">
-                  <summary className="p-6 cursor-pointer list-none flex items-center justify-between bg-white/40">
-                    <div className="flex items-center gap-5">
-                      <div className="w-12 h-12 rounded-claude-lg bg-claude-parchment flex items-center justify-center">
-                        <FileText className="w-6 h-6 text-claude-terracotta/70" />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-base text-claude-near-black">{item.topicDetected}</h3>
-                        <p className="text-xs text-claude-stone-gray font-medium uppercase tracking-wider mt-1">{new Date(item.timestamp).toLocaleDateString()} · {item.questions.length} Questions</p>
-                      </div>
-                    </div>
-                    <ChevronRight className="w-5 h-5 text-claude-stone-gray transition-transform group-open:rotate-90" />
-                  </summary>
-                  <div className="p-6 border-t border-claude-border-cream space-y-4 bg-claude-ivory">
-                    <p className="text-sm text-claude-olive-gray leading-relaxed font-serif">{item.summary}</p>
-                    <div className="flex flex-wrap gap-2">
-                      {item.keywords.map((kw, j) => (
-                        <Badge key={j} variant="secondary" className="bg-claude-parchment text-claude-olive-gray border-claude-border-cream text-[10px] uppercase font-bold tracking-wider">{kw}</Badge>
-                      ))}
-                    </div>
-                    <div className="pt-2">
-                      <Button variant="warm-sand" size="sm" className="rounded-claude-md"
-                        onClick={() => generateQuestionsDocx(item.topicDetected, item.questions)}>
-                        <FileText className="w-4 h-4 mr-2" />Download archive (.docx)
-                      </Button>
-                    </div>
-                  </div>
-                </details>
-              ))}
-            </div>
-          </div>
-        )}
-      </>
-    )}
-
-    {activeTab === "library" && (
-          <div className="space-y-8 animate-in fade-in duration-500">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {isLibraryLoading ? (
-                Array(6).fill(0).map((_, i) => (
-                  <Card key={i} className="animate-pulse bg-claude-ivory h-40 border-none" />
-                ))
-              ) : libraryBanks.length > 0 ? (
-                libraryBanks.map((bank, i) => (
-                  <Card key={i} className="bg-white border-none shadow-claude-ring hover:shadow-claude-whisper transition-all cursor-pointer group rounded-claude-2xl overflow-hidden" onClick={() => { setResult(bank); setActiveTab("generator"); }}>
-                    <CardHeader className="pb-2">
-                       <div className="flex justify-between items-start mb-2">
-                          <Badge variant="outline" className="text-[10px] uppercase">{bank.subject || "Chemistry"}</Badge>
-                          <span className="text-[10px] text-claude-stone-gray">{new Date(bank.timestamp).toLocaleDateString()}</span>
-                       </div>
-                       <CardTitle className="text-lg group-hover:text-claude-terracotta transition-colors">{bank.topicDetected}</CardTitle>
-                       <CardDescription className="line-clamp-2 text-xs">{bank.summary}</CardDescription>
+                      <CardTitle className="text-3xl font-serif font-medium">Strategic Inputs</CardTitle>
                     </CardHeader>
-                    <CardContent className="pt-2">
-                       <div className="flex items-center justify-between text-xs text-claude-olive-gray">
-                          <span className="flex items-center gap-1"><Users className="w-3 h-3" /> By {bank.authorName}</span>
-                          <span className="font-bold text-claude-terracotta">{bank.questions?.length || 0} Questions</span>
-                       </div>
+                    <CardContent className="p-8 pt-0 space-y-6">
+                      {scanMode === "notes" ? (
+                        <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-claude-border-cream rounded-claude-2xl p-12 text-center hover:bg-claude-parchment/50 cursor-pointer transition-colors group">
+                           <Upload className="w-10 h-10 mx-auto mb-4 text-claude-stone-gray/40 group-hover:text-claude-terracotta transition-colors" />
+                           <p className="text-xs font-bold uppercase tracking-widest text-claude-olive-gray">Upload Intelligence Assets</p>
+                           <input type="file" ref={fileInputRef} className="hidden" multiple onChange={handleImageUpload} />
+                           {images.length > 0 && <p className="mt-4 text-[10px] text-claude-terracotta font-bold">{images.length}/{MAX_IMAGES} Assets Prepared</p>}
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                           <Label className="uppercase text-[10px] font-bold tracking-[0.2em] text-claude-stone-gray ml-1">Target Subjects</Label>
+                           <Input placeholder="e.g. Thermodynamics, Equilibrium..." value={topic} onChange={e => setTopic(e.target.value)} className="h-14 rounded-claude-xl border-claude-border-cream" />
+                        </div>
+                      )}
+                      <div className="space-y-2">
+                         <Label className="uppercase text-[10px] font-bold tracking-[0.2em] text-claude-stone-gray ml-1">Knowledge Vertical</Label>
+                         <select value={subject} onChange={e => setSubject(e.target.value)} className="w-full h-14 bg-white rounded-claude-xl border border-claude-border-cream px-4 font-serif">
+                            {SUBJECTS.flatMap(g => g.items).map(s => <option key={s} value={s}>{s}</option>)}
+                         </select>
+                      </div>
+                      <Button onClick={handleScan} disabled={isScanning} className="w-full h-16 bg-claude-terracotta hover:bg-claude-terracotta/90 text-white font-bold rounded-claude-2xl mt-4 shadow-lg text-sm uppercase tracking-widest">
+                        {isScanning ? <Loader2 className="animate-spin" /> : <Sparkles className="w-5 h-5 mr-3" />}
+                        {isScanning ? "Engaging AI Synth..." : "Initiate Extraction"}
+                      </Button>
                     </CardContent>
                   </Card>
-                ))
-              ) : (
-                <div className="col-span-full text-center py-20 bg-white/50 rounded-claude-2xl border-2 border-dashed">
-                  <Globe className="w-12 h-12 mx-auto text-claude-stone-gray/30 mb-4" />
-                  <p className="text-claude-olive-gray">The library is currently empty. Be the first to publish!</p>
                 </div>
-              )}
-            </div>
-          </div>
-        )}
 
-        {activeTab === "classrooms" && (
-          <div className="max-w-4xl mx-auto space-y-12 animate-in fade-in duration-500 pb-20">
-            {/* Join Section */}
-            <Card className="bg-claude-terracotta text-white border-none shadow-claude-whisper p-8 text-center overflow-hidden relative">
-              <div className="relative z-10">
-                <h3 className="text-3xl font-serif mb-4 flex items-center justify-center gap-3">
-                  <GraduationCap className="w-8 h-8" />
-                  Enter Classroom Code
-                </h3>
-                <p className="opacity-80 mb-8 max-w-sm mx-auto text-sm">Join your teacher's session to instantly access the shared question bank for free.</p>
-                <div className="flex gap-3 max-w-sm mx-auto">
-                   <Input 
-                      placeholder="e.g. SCAN-XY12" 
-                      className="bg-white/20 border-white/30 text-white placeholder:text-white/50 text-center text-2xl font-bold tracking-widest h-14"
-                      value={classroomCode}
-                      onChange={e => setClassroomCode(e.target.value.toUpperCase())}
-                   />
-                   <Button onClick={joinClassroom} disabled={isJoining || !classroomCode} className="h-14 px-8 bg-white text-claude-terracotta font-bold hover:bg-claude-ivory">
-                      {isJoining ? <Loader2 className="animate-spin" /> : "JOIN"}
-                   </Button>
+                <div className="lg:col-span-7">
+                  {result ? (
+                    <Card className="border-none shadow-claude-whisper bg-white rounded-claude-3xl overflow-hidden">
+                       <CardHeader className="p-10 border-b border-claude-border-cream">
+                          <div className="flex justify-between items-start">
+                             <div>
+                                <h2 className="text-4xl font-serif font-medium text-claude-near-black mb-2">{result.topicDetected}</h2>
+                                <p className="text-claude-olive-gray italic font-serif leading-relaxed text-sm">{result.summary}</p>
+                             </div>
+                             <div className="flex gap-2">
+                                <Button variant="outline" size="sm" className="rounded-full text-[10px] font-bold border-claude-terracotta text-claude-terracotta" onClick={() => publishToLibrary(result)}><Globe className="w-3 h-3 mr-2" />SHARE</Button>
+                                <Button variant="outline" size="sm" className="rounded-full text-[10px] font-bold" onClick={() => createClassroom(result)}><Users className="w-3 h-3 mr-2" />CLASS</Button>
+                             </div>
+                          </div>
+                       </CardHeader>
+                       <CardContent className="p-10 space-y-8">
+                          {result.questions.map((q, i) => (
+                             <div key={i} className="p-8 bg-claude-ivory rounded-claude-2xl border border-claude-border-cream relative group shadow-sm">
+                                <span className="absolute -top-3 left-8 px-4 py-1 bg-claude-terracotta text-white text-[10px] font-bold rounded-full">QUESTION {i+1}</span>
+                                <p className="text-xl font-medium mb-6 leading-relaxed">{q.question}</p>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                   {q.options.map((opt, j) => (
+                                      <div key={j} className={`p-4 rounded-claude-xl border flex items-center gap-4 text-sm ${opt === q.correctAnswer ? "bg-green-50 border-green-200 text-green-800" : "bg-white border-claude-border-cream"}`}>
+                                         <div className="w-6 h-6 rounded-full bg-claude-parchment flex items-center justify-center font-bold text-[10px]">{String.fromCharCode(65+j)}</div>
+                                         {opt}
+                                      </div>
+                                   ))}
+                                </div>
+                                <div className="mt-8 pt-6 border-t border-claude-border-cream flex justify-between items-center opacity-60">
+                                   <Badge variant="outline" className="uppercase tracking-widest text-[9px] font-bold">{q.difficulty}</Badge>
+                                   <span className="text-[10px] font-bold uppercase tracking-widest text-claude-terracotta">{q.targetExam}</span>
+                                </div>
+                             </div>
+                          ))}
+                          <div className="flex gap-4">
+                             <Button className="flex-1 h-14 bg-claude-near-black text-white rounded-claude-xl" onClick={() => generateQuestionsPDF(result.topicDetected, result.questions)}><Download className="w-5 h-5 mr-3" /> Export PDF</Button>
+                             <Button variant="warm-sand" className="flex-1 h-14 rounded-claude-xl" onClick={() => generateQuestionsDocx(result.topicDetected, result.questions)}>Download DOCX</Button>
+                          </div>
+                       </CardContent>
+                    </Card>
+                  ) : (
+                    <div className="h-[600px] flex flex-col items-center justify-center border-2 border-dashed border-claude-border-cream rounded-claude-3xl bg-white/30 text-center p-12">
+                       <div className="w-24 h-24 bg-claude-parchment rounded-full flex items-center justify-center mb-8 shadow-inner"><FileText className="w-10 h-10 text-claude-stone-gray/30" /></div>
+                       <h3 className="text-3xl font-serif text-claude-stone-gray mb-4">Command Center Idle</h3>
+                       <p className="max-w-xs text-claude-olive-gray font-serif italic italic text-sm">Waiting for strategic data to synthesize a high-fidelity assessment bank.</p>
+                    </div>
+                  )}
                 </div>
-              </div>
-              <Users className="absolute -bottom-10 -right-10 w-48 h-48 opacity-10 rotate-12" />
-            </Card>
-
-            {/* My Created Classrooms (Teacher Management) */}
-            <div className="space-y-8">
-              <div className="flex items-center justify-between">
-                <h2 className="text-3xl font-serif font-medium">Manage Your Classes</h2>
-                <Badge variant="outline" className="px-4 py-1.5 uppercase tracking-widest border-claude-terracotta text-claude-terracotta font-bold">Admin</Badge>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {isCroomsLoading ? (
-                   Array(2).fill(0).map((_, i) => <Card key={i} className="h-32 animate-pulse bg-claude-ivory border-none" />)
-                ) : myClassrooms.length > 0 ? (
-                  myClassrooms.map((cl, i) => (
-                    <Card key={i} className="bg-white border-claude-border-cream shadow-claude-ring rounded-claude-2xl p-6 group transition-all hover:shadow-claude-whisper">
-                      <div className="flex justify-between items-start mb-4">
-                        <div className="bg-claude-parchment p-2 rounded-xl">
-                          <Users className="w-6 h-6 text-claude-terracotta" />
+              {history.length > 0 && (
+                <div className="mt-24 pt-16 border-t border-claude-border-cream">
+                  <h2 className="text-4xl font-serif mb-12">Tactical Archive</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {history.map((h, i) => (
+                      <Card key={i} className="bg-white border-none shadow-claude-ring rounded-claude-3xl p-8 hover:shadow-claude-whisper transition-all group cursor-pointer" onClick={() => setResult(h)}>
+                        <div className="flex items-center gap-6 mb-6">
+                           <div className="w-14 h-14 bg-claude-parchment rounded-claude-xl flex items-center justify-center text-claude-terracotta"><FlaskConical className="w-6 h-6" /></div>
+                           <div>
+                              <h4 className="text-2xl font-serif font-medium group-hover:text-claude-terracotta transition-colors">{h.topicDetected}</h4>
+                              <p className="text-[10px] font-bold uppercase tracking-widest text-claude-stone-gray mt-1">{new Date(h.timestamp).toLocaleDateString()} · {h.questions.length} Items</p>
+                           </div>
                         </div>
-                        <div className="text-right">
-                          <p className="text-[10px] uppercase font-bold text-claude-stone-gray mb-1">Join Code</p>
-                          <code className="text-lg font-mono font-bold text-claude-terracotta bg-claude-parchment px-2 py-0.5 rounded border border-claude-border-cream">{cl.code}</code>
+                        <p className="text-xs text-claude-olive-gray line-clamp-2 font-serif mb-6 leading-relaxed italic">"{h.summary}"</p>
+                        <div className="flex gap-2">
+                           <Badge variant="secondary" className="bg-claude-parchment text-claude-olive-gray text-[8px] uppercase">{h.keywords[0]}</Badge>
+                           <Badge variant="secondary" className="bg-claude-parchment text-claude-olive-gray text-[8px] uppercase">{h.keywords[1]}</Badge>
                         </div>
-                      </div>
-                      <h4 className="text-xl font-serif font-medium mb-1 truncate">{cl.topicDetected}</h4>
-                      <p className="text-xs text-claude-olive-gray mb-6">
-                        {cl.subject} · {cl.questions?.length || 0} Questions · <strong className="text-claude-terracotta">{cl.memberCount || 0} Students</strong>
-                      </p>
-                      
-                      <div className="flex gap-2">
-                        <Button variant="outline" className="flex-1 rounded-claude-md text-xs font-bold" onClick={() => { setTopic(cl.topicDetected); setActiveTab("generator"); setResult(cl); }}>
-                           VIEW CONTENT
-                        </Button>
-                        <Button variant="ghost" size="icon" className="text-claude-stone-gray hover:text-claude-crimson" onClick={() => toast.info("Delete feature coming soon!")}>
-                          <X className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </Card>
-                  ))
-                ) : (
-                  <div className="col-span-full py-12 text-center rounded-claude-2xl border-2 border-dashed border-claude-border-cream bg-white/30">
-                    <p className="text-claude-olive-gray text-sm italic">You haven't created any classroom groups yet.</p>
+                      </Card>
+                    ))}
                   </div>
-                )}
-              </div>
-            </div>
-
-            {/* Joined Classrooms (Student View) */}
-            {joinedClasses.length > 0 && (
-              <div className="pt-8 border-t border-claude-border-cream">
-                <h3 className="text-2xl font-serif font-medium mb-6">Recently Joined Classes</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {joinedClasses.map((bank, i) => (
-                    <Card key={i} className="bg-white border-claude-border-cream shadow-sm hover:shadow-claude-ring transition-all cursor-pointer p-5 flex justify-between items-center" onClick={() => { setResult(bank); setActiveTab("generator"); }}>
-                       <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 rounded-full bg-claude-parchment flex items-center justify-center font-bold text-claude-terracotta">
-                             {bank.topicDetected?.[0]}
-                          </div>
-                          <div>
-                             <h5 className="font-bold text-sm text-claude-near-black truncate max-w-[150px]">{bank.topicDetected}</h5>
-                             <p className="text-[10px] text-claude-olive-gray uppercase font-bold tracking-widest">{bank.subject}</p>
-                          </div>
-                       </div>
-                       <ChevronRight className="w-4 h-4 text-claude-stone-gray" />
-                    </Card>
-                  ))}
                 </div>
-              </div>
-            )}
+              )}
+            </motion.div>
+          )}
+
+          {activeTab === "library" && (
+            <motion.div key="lib" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {libraryBanks.map((b, i) => (
+                <Card key={i} className="bg-white border-none shadow-claude-ring rounded-claude-2xl p-8 hover:-translate-y-1 transition-all cursor-pointer" onClick={() => { setResult(b); setActiveTab("generator"); }}>
+                   <div className="flex justify-between items-start mb-6">
+                      <Badge variant="outline" className="text-[9px] uppercase tracking-widest p-1.5 px-3">{b.subject || "Chemistry"}</Badge>
+                      <Share2 className="w-4 h-4 text-claude-stone-gray opacity-40" />
+                   </div>
+                   <h4 className="text-2xl font-serif mb-2">{b.topicDetected}</h4>
+                   <p className="text-[10px] font-bold uppercase tracking-widest text-claude-terracotta mb-6">BY {b.authorName}</p>
+                   <p className="text-xs text-claude-olive-gray line-clamp-3 font-serif italic leading-relaxed">{b.summary}</p>
+                </Card>
+              ))}
+            </motion.div>
+          )}
+
+          {activeTab === "classrooms" && (
+            <motion.div key="crooms" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="max-w-4xl mx-auto space-y-16">
+               <Card className="bg-claude-terracotta text-white border-none rounded-claude-3xl p-12 text-center relative overflow-hidden shadow-2xl">
+                  <div className="relative z-10">
+                     <h2 className="text-4xl font-serif mb-4">Classroom Portal</h2>
+                     <p className="opacity-80 mb-10 font-serif italic italic max-w-sm mx-auto">Enter your teacher's command key to sync shared strategic assessments.</p>
+                     <div className="flex gap-3 max-w-md mx-auto">
+                        <Input placeholder="SCAN-CODE" value={classroomCode} onChange={e => setClassroomCode(e.target.value.toUpperCase())} className="h-16 text-center text-3xl font-mono font-bold bg-white/20 border-white/30 text-white placeholder:text-white/40 rounded-claude-2xl" />
+                        <Button onClick={joinClassroom} disabled={isJoining} className="h-16 px-10 bg-white text-claude-terracotta font-bold rounded-claude-2xl shadow-lg">JOIN</Button>
+                     </div>
+                  </div>
+                  <Users className="absolute -bottom-10 -right-10 w-64 h-64 opacity-10 rotate-12" />
+               </Card>
+
+               <div className="space-y-8">
+                  <h3 className="text-3xl font-serif border-b border-claude-border-cream pb-6">Management Deck</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                     {myClassrooms.map((c, i) => (
+                        <Card key={i} className="bg-white border-none shadow-claude-ring p-8 rounded-claude-3xl relative overflow-hidden group">
+                           <div className="absolute top-0 right-0 p-4 font-mono font-bold text-claude-terracotta text-xl">{c.code}</div>
+                           <div className="w-12 h-12 bg-claude-parchment rounded-xl flex items-center justify-center mb-6"><Users className="w-6 h-6 text-claude-terracotta" /></div>
+                           <h4 className="text-2xl font-serif mb-1">{c.topicDetected}</h4>
+                           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-claude-stone-gray mb-8">{c.subject} · {c.memberCount || 0} MEMBERS</p>
+                           <Button variant="outline" className="w-full rounded-full border-claude-terracotta text-claude-terracotta font-bold text-[10px] h-12 tracking-widest uppercase" onClick={() => { setResult(c); setActiveTab("generator"); }}>Manage Intelligence</Button>
+                        </Card>
+                     ))}
+                  </div>
+               </div>
+
+               {joinedClasses.length > 0 && (
+                 <div className="pt-12 border-t border-claude-border-cream">
+                    <h3 className="text-2xl font-serif mb-8">Synced Sessions</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                       {joinedClasses.map((cl, i) => (
+                          <div key={i} onClick={() => { setResult(cl); setActiveTab("generator"); }} className="bg-white p-6 rounded-claude-2xl shadow-sm border border-claude-border-cream flex justify-between items-center cursor-pointer hover:shadow-claude-ring transition-all">
+                             <div className="flex items-center gap-4">
+                                <div className="w-10 h-10 bg-claude-parchment rounded-full flex items-center justify-center font-bold text-claude-terracotta">{cl.topicDetected?.[0]}</div>
+                                <div>
+                                   <p className="font-bold text-sm truncate max-w-[120px]">{cl.topicDetected}</p>
+                                   <p className="text-[8px] uppercase tracking-widest text-claude-stone-gray">{cl.teacherName || "Verified Teacher"}</p>
+                                </div>
+                             </div>
+                             <ChevronRight className="w-4 h-4 text-claude-stone-gray" />
+                          </div>
+                       ))}
+                    </div>
+                 </div>
+               )}
+            </motion.div>
+          )}
+
+          {activeTab === "map" && (
+            <motion.div key="map" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-[750px] bg-white/40 backdrop-blur-md rounded-claude-3xl border border-claude-border-cream relative overflow-hidden shadow-2xl">
+               <div className="absolute top-10 left-10 p-8 bg-white/80 backdrop-blur-xl border border-claude-border-cream rounded-claude-3xl max-w-sm z-10 shadow-xl">
+                  <h2 className="text-3xl font-serif mb-2">Knowledge Universe</h2>
+                  <p className="text-xs text-claude-olive-gray font-serif italic italic leading-relaxed">Live mapping of all semantic vectors and strategic assessment nodes in the global index.</p>
+               </div>
+               <GraphView />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {showBuyModal && (
+          <div className="fixed inset-0 bg-claude-near-black/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
+            <div className="bg-claude-parchment rounded-claude-3xl p-10 max-w-md w-full relative shadow-2xl border border-claude-border-cream">
+               <button onClick={() => setShowBuyModal(false)} className="absolute top-6 right-6 text-claude-stone-gray hover:text-claude-near-black"><X /></button>
+               <div className="text-center mb-10">
+                  <div className="w-16 h-16 bg-claude-terracotta/10 text-claude-terracotta rounded-2xl flex items-center justify-center mx-auto mb-6"><Coins className="w-8 h-8" /></div>
+                  <h2 className="text-3xl font-serif mb-2">Refuel Intelligence</h2>
+                  <p className="text-sm text-claude-olive-gray">Select an extraction capacity to continue.</p>
+               </div>
+               <div className="space-y-4">
+                  {Object.entries(creditPacks).map(([id, p]) => (
+                    <button key={id} onClick={() => handleBuyCredits(id)} disabled={!!isBuying} className="w-full p-6 bg-white border border-claude-border-cream rounded-claude-2xl flex justify-between items-center group hover:border-claude-terracotta transition-all shadow-sm">
+                       <div className="text-left">
+                          <p className="font-bold text-claude-near-black group-hover:text-claude-terracotta">{p.name}</p>
+                          <p className="text-[10px] uppercase font-bold text-claude-stone-gray mt-1 tracking-widest">{p.credits} Scans Available</p>
+                       </div>
+                       <div className="text-xl font-bold text-claude-terracotta">{p.display}</div>
+                    </button>
+                  ))}
+               </div>
+               <p className="text-center text-[10px] font-bold text-claude-stone-gray uppercase tracking-[0.3em] mt-8">Secure Gateway Protected</p>
+            </div>
           </div>
         )}
-
-        {/* Knowledge Map */}
-        {activeTab === "map" && <GraphView />}
+        <Toaster />
       </div>
-
-
-      {/* ─── Buy Credits Modal ─────────────────────────────────────────────── */}
-      {showBuyModal && (
-        <div className="fixed inset-0 bg-claude-near-black/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-claude-parchment rounded-claude-3xl shadow-claude-whisper max-w-md w-full p-10 relative border border-claude-border-cream">
-            <button onClick={() => setShowBuyModal(false)} className="absolute right-6 top-6 text-claude-stone-gray hover:text-claude-near-black transition-colors">
-              <X className="w-6 h-6" />
-            </button>
-            <div className="text-center mb-8">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-claude-2xl bg-claude-terracotta/10 text-claude-terracotta mb-4">
-                <Coins className="w-8 h-8" />
-              </div>
-              <h2 className="text-3xl font-serif font-medium">Extend Your Scans</h2>
-              <p className="text-claude-olive-gray mt-2 leading-relaxed">1 credit = 1 complete question bank extraction</p>
-            </div>
-
-            {credits > 0 && (
-              <div className="mb-8 p-4 bg-claude-warm-sand/50 rounded-claude-lg text-sm text-claude-near-black font-medium border border-claude-border-cream text-center">
-                Current balance: <strong>{credits}</strong> credit{credits !== 1 ? "s" : ""}
-              </div>
-            )}
-
-            <div className="space-y-4">
-              {Object.entries(creditPacks).map(([packId, packData]) => {
-                const pack = packData as CreditPack;
-                return (
-                  <button
-                    key={packId}
-                    onClick={() => handleBuyCredits(packId)}
-                    disabled={!!isBuying}
-                    className="w-full flex items-center justify-between p-5 rounded-claude-xl border border-claude-border-cream bg-white hover:border-claude-terracotta hover:bg-claude-parchment transition-all disabled:opacity-60 text-left shadow-sm group"
-                  >
-                    <div>
-                      <p className="font-bold text-claude-near-black group-hover:text-claude-terracotta transition-colors">{pack.name}</p>
-                      <p className="text-xs text-claude-olive-gray font-medium mt-1">{pack.credits} scans · {Math.round(pack.amount / pack.credits / 100)} ₹/scan</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-bold text-xl text-claude-terracotta">{pack.display}</p>
-                      {isBuying === packId && <Loader2 className="w-4 h-4 animate-spin text-claude-terracotta ml-auto mt-1" />}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            <p className="text-[10px] text-claude-stone-gray text-center mt-8 uppercase tracking-widest font-bold">
-              Secure Gateway · Razorpay · UPI · Cards
-            </p>
-          </div>
-        </div>
-      )}
-
-      <Toaster />
     </div>
   );
 }

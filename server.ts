@@ -35,11 +35,7 @@ type PackId = keyof typeof CREDIT_PACKS;
 
 const FREE_WELCOME_CREDITS = 3;
 
-// ─── Razorpay client ──────────────────────────────────────────────────────────
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID || "",
-  key_secret: process.env.RAZORPAY_KEY_SECRET || "",
-});
+// ─── Razorpay client (Use getRazorpay() instead) ──────────────────────────
 
 // ─── Pinecone & Embedding Init ──────────────────────────────────────────────
 const pc = new Pinecone({ apiKey: process.env.PINECONE_API_KEY || "" });

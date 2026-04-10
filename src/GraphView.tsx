@@ -67,84 +67,91 @@ export default function GraphView() {
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <div className="flex flex-col md:flex-row gap-6 items-start">
-        <div className="w-full md:w-3/4">
-          <Card className="border-none shadow-claude-whisper bg-claude-ivory rounded-claude-2xl overflow-hidden relative min-h-[600px]">
-            <CardHeader className="absolute top-0 left-0 z-10 p-6 bg-gradient-to-b from-claude-ivory via-claude-ivory/80 to-transparent w-full pointer-events-none">
-              <CardTitle className="flex items-center gap-3 text-2xl pointer-events-auto">
-                <Zap className="w-6 h-6 text-amber-500 fill-amber-500" />
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-1000">
+      <div className="flex flex-col xl:flex-row gap-8 items-start">
+        <div className="w-full xl:w-[78%]">
+          <Card className="premium-card border-none shadow-claude-whisper bg-white/50 backdrop-blur-sm rounded-claude-3xl overflow-hidden relative min-h-[650px] border border-white/40">
+            <CardHeader className="absolute top-0 left-0 z-10 p-10 bg-gradient-to-b from-white via-white/40 to-transparent w-full pointer-events-none">
+              <CardTitle className="flex items-center gap-4 text-4xl font-serif pointer-events-auto text-gradient">
+                <Zap className="w-8 h-8 text-primary shadow-primary/20" />
                 Knowledge Universe
               </CardTitle>
-              <CardDescription className="text-claude-olive-gray pointer-events-auto">
-                A semantic map of every topic in your database. Connected nodes share deep logical relationships.
+              <CardDescription className="text-muted-foreground text-base max-w-xl mt-2 pointer-events-auto leading-relaxed">
+                A globally shared semantic map of all human knowledge discovered on ChemScan. 
+                Connected nodes share deep logical relationships and cross-disciplinary overlaps.
               </CardDescription>
             </CardHeader>
             
-            <div className="w-full h-[600px] cursor-grab active:cursor-grabbing">
+            <div className="w-full h-[650px] cursor-grab active:cursor-grabbing">
               <ForceGraph2D
                 ref={graphRef}
                 graphData={data}
                 nodeLabel="topic"
                 nodeColor={n => (n as GraphNode).color || "#ccc"}
-                nodeRelSize={7}
-                linkWidth={1.5}
-                linkColor={() => "#e5e7eb"}
-                linkDirectionalParticles={2}
-                linkDirectionalParticleSpeed={0.005}
-                backgroundColor="#fdfcfb" // Match claude-ivory
-                cooldownTicks={100}
+                nodeRelSize={9}
+                linkWidth={2}
+                linkColor={() => "#d1563122"}
+                linkDirectionalParticles={3}
+                linkDirectionalParticleSpeed={0.007}
+                backgroundColor="transparent"
+                cooldownTicks={150}
                 onNodeClick={(node: any) => {
                   if (graphRef.current) {
                     graphRef.current.centerAt(node.x, node.y, 1000);
-                    graphRef.current.zoom(3, 1000);
+                    graphRef.current.zoom(3.5, 1000);
                   }
                 }}
               />
             </div>
             
             {/* Legend */}
-            <div className="absolute bottom-4 left-4 flex flex-wrap gap-4 bg-white/80 backdrop-blur-sm p-3 rounded-lg border border-gray-100 shadow-sm z-10">
+            <div className="absolute bottom-8 left-8 flex flex-wrap gap-6 glass p-4 rounded-2xl z-10">
               {Object.entries(SUBJECT_COLORS).map(([sub, color]) => (
-                <div key={sub} className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
-                  <span className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">{sub}</span>
+                <div key={sub} className="flex items-center gap-2.5">
+                  <div className="w-4 h-4 rounded-full shadow-lg" style={{ backgroundColor: color }} />
+                  <span className="text-[11px] font-bold text-foreground/70 uppercase tracking-[0.1em]">{sub}</span>
                 </div>
               ))}
             </div>
           </Card>
         </div>
 
-        <div className="w-full md:w-1/4 space-y-6">
-          <Card className="border-none shadow-claude-whisper bg-white rounded-claude-2xl p-6">
-            <h3 className="text-lg font-serif font-medium mb-4">Database Stats</h3>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 bg-claude-parchment rounded-xl">
+        <div className="w-full xl:w-[22%] space-y-8">
+          <Card className="premium-card border-none shadow-claude-whisper bg-white rounded-claude-3xl p-8 border border-white/60">
+            <h3 className="text-2xl font-serif font-medium mb-6 text-foreground">Global Insights</h3>
+            <div className="space-y-6">
+              <div className="space-y-2">
                 <div className="flex items-center gap-3">
-                  <LayoutPanelLeft className="w-5 h-5 text-claude-terracotta" />
-                  <span className="text-sm font-medium">Total Banks</span>
+                  <LayoutPanelLeft className="w-5 h-5 text-primary" />
+                  <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Total Entities</span>
                 </div>
-                <span className="text-xl font-bold">{data.nodes.length}</span>
+                <div className="text-5xl font-serif font-medium text-foreground">{data.nodes.length}</div>
               </div>
-              <div className="flex items-center justify-between p-3 bg-claude-parchment rounded-xl">
+
+              <Separator className="bg-border/60" />
+
+              <div className="space-y-2">
                 <div className="flex items-center gap-3">
                   <Share2 className="w-5 h-5 text-blue-500" />
-                  <span className="text-sm font-medium">Connections</span>
+                  <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Neural Links</span>
                 </div>
-                <span className="text-xl font-bold">{data.links.length}</span>
+                <div className="text-5xl font-serif font-medium text-foreground">{data.links.length}</div>
               </div>
             </div>
-            <p className="mt-6 text-xs text-claude-olive-gray italic leading-relaxed">
-              *Connections represent a semantic similarity score of 0.88 or higher between search vectors.
+            <p className="mt-8 text-[11px] text-muted-foreground italic leading-relaxed">
+              *Connections represent a cross-user semantic similarity score validated by the vector database.
             </p>
           </Card>
           
-          <Card className="border-none shadow-claude-whisper bg-claude-terracotta text-white rounded-claude-2xl p-6">
-            <h3 className="font-bold text-sm mb-2 uppercase tracking-widest">Semantic Proximity</h3>
-            <p className="text-sm opacity-90 leading-relaxed">
-              The closer two nodes are, the more likely the AI will reuse cached questions, saving you credits and loading instantly.
+          <div className="glass bg-primary p-8 rounded-claude-3xl text-white shadow-2xl relative overflow-hidden group">
+            <div className="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-110 transition-transform duration-700">
+               <FlaskConical className="w-32 h-32" />
+            </div>
+            <h3 className="font-bold text-xs mb-3 uppercase tracking-[0.2em] opacity-80">Semantic Density</h3>
+            <p className="text-base font-medium leading-relaxed">
+              The closer two nodes are, the more logical power the AI has to reuse patterns, reducing your token usage and ensuring maximum speed.
             </p>
-          </Card>
+          </div>
         </div>
       </div>
     </div>

@@ -16,10 +16,11 @@ COPY . .
 # Build the frontend
 RUN npm run build
 
-# Expose the port Express runs on
-EXPOSE 3000
+# Expose the port Express runs on (Cloud Run uses 8080)
+EXPOSE 8080
 
 ENV NODE_ENV=production
+ENV PORT=8080
 
-# Start the server directly
+# Start the server
 CMD ["npx", "tsx", "server.ts"]
