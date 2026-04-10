@@ -197,6 +197,12 @@ async function startServer() {
         timestamp: admin.firestore.FieldValue.serverTimestamp()
       });
 
+      // Ensure a top-level user document exists for console visibility
+      t.set(db.collection("users").doc(uid), {
+        lastCreditUpdate: admin.firestore.FieldValue.serverTimestamp(),
+        hasPurchased: true
+      }, { merge: true });
+
       t.set(profileRef, { credits: current + creditsToAdd }, { merge: true });
     });
   }
@@ -729,6 +735,7 @@ async function startServer() {
         return res.status(500).json({ error: `Question structuring failed: ${err.message}` });
       }
 
+      let structured: any = {};
       try {
         structured = JSON.parse(structuredText || "{}");
 
@@ -760,8 +767,8 @@ async function startServer() {
       });
 
       // ─── SAVE TO CACHE (Hybrid Firestore + Pinecone) ─────────────────────
-      if (isTopicOnly && structured.questions?.length > 0) {
-        // Save full scan to Firestore
+      if (structured.questions?.length > 0) {
+        // Save to Firestore (Anonymized)
         db.collection("global_cache").doc(cacheKey).set({
           topicDetected: analysis.topicDetected || topic,
           summary: analysis.summary,
@@ -772,19 +779,20 @@ async function startServer() {
           timestamp: admin.firestore.FieldValue.serverTimestamp()
         }).catch(err => console.error("[Cache:SaveError:Firestore]", err));
 
-        // Save metadata & vector to Pinecone for future semantic searches
+        // Save to Pinecone
         (async () => {
           const vector = await getTopicEmbedding(analysis.topicDetected || topic);
           if (vector) {
-            await pcIndex.upsert([{
-              id: cacheKey,
-              values: vector,
-              metadata: {
-                topicDetected: analysis.topicDetected || topic,
-                subject: subjectLabel
-              }
-            }]);
-            console.log(`[Cache:SAVE:Vector] key=${cacheKey}`);
+            await pcIndex.upsert({
+              records: [{
+                id: cacheKey,
+                values: vector,
+                metadata: {
+                  topicDetected: analysis.topicDetected || topic,
+                  subject: subjectLabel
+                }
+              }]
+            });
           }
         })().catch(err => console.error("[Cache:SaveError:Pinecone]", err));
       }
@@ -804,15 +812,26 @@ async function startServer() {
   // ─── Knowledge Map API ────────────────────────────────────────────────────────
   app.get("/api/graph-data", async (req, res) => {
     try {
-      // Fetch up to 100 recent question banks
-      const snap = await db.collection("global_cache").limit(100).get();
-      const nodes = snap.docs.map(doc => ({
-        id: doc.id,
-        topic: doc.data().topicDetected || "Unknown Topic",
-        subject: doc.data().subject || "Chemistry",
-      }));
+      // Fetch from both global_cache and community_library
+      const [cacheSnap, librarySnap] = await Promise.all([
+        db.collection("global_cache").limit(50).get(),
+        db.collection("community_library").limit(50).get()
+      ]);
 
-      // No links for now, we will add them once the backfill is complete
+      const nodes = [
+        ...cacheSnap.docs.map(doc => ({
+          id: doc.id,
+          topic: doc.data().topicDetected || "Topic",
+          subject: doc.data().subject || "Chemistry",
+        })),
+        ...librarySnap.docs.map(doc => ({
+          id: doc.id,
+          topic: doc.data().topicDetected || "Research",
+          subject: doc.data().subject || "Biology",
+        }))
+      ];
+
+      // Temporary simple links (semantic clustering will happen via Pinecone later)
       const links: any[] = [];
       res.json({ nodes, links });
     } catch (err) {
@@ -836,11 +855,13 @@ async function startServer() {
         // Vectorize and upsert
         const vector = await getTopicEmbedding(topic);
         if (vector) {
-          await pcIndex.upsert([{
-            id,
-            values: vector,
-            metadata: { topicDetected: topic, subject }
-          }]);
+          await pcIndex.upsert({
+            records: [{
+              id,
+              values: vector,
+              metadata: { topicDetected: topic, subject }
+            }]
+          });
           vectorizedCount++;
         }
       }

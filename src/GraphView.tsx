@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Loader2, Zap, LayoutPanelLeft, Share2 } from "lucide-react";
+import { Loader2, Zap, LayoutPanelLeft, Share2, FlaskConical } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
 
 interface GraphNode {
   id: string;

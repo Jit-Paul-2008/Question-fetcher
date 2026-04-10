@@ -20,7 +20,7 @@ import { scanSubjectNote, ScanResult } from "@/src/lib/gemini";
 import { generateQuestionsPDF } from "@/src/lib/pdf";
 import GraphView from "./GraphView";
 import { generateQuestionsDocx } from "@/src/lib/docx";
-import { auth, db, logOut } from "@/src/lib/firebase";
+import { auth, db, logOut, signInWithGoogle } from "@/src/lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { collection, addDoc, onSnapshot, query, orderBy, doc, getDoc, setDoc, where } from "firebase/firestore";
 import { motion, AnimatePresence } from "framer-motion";
@@ -185,7 +185,7 @@ export default function App() {
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
-    Array.from(files).forEach(file => {
+    Array.from(files).forEach((file: any) => {
       const reader = new FileReader();
       reader.onloadend = () => setImages(prev => [...prev, reader.result as string].slice(0, MAX_IMAGES));
       reader.readAsDataURL(file);
@@ -307,9 +307,9 @@ export default function App() {
       <div className="w-20 h-20 rounded-claude-3xl bg-claude-terracotta text-white flex items-center justify-center mb-8 shadow-xl">
         <FlaskConical className="w-10 h-10" />
       </div>
-      <h1 className="text-5xl font-serif font-medium mb-4">ChemScan Pro Max</h1>
+      <h1 className="text-5xl font-serif font-medium mb-4">ChemScan</h1>
       <p className="text-claude-olive-gray mb-10 max-w-sm">Elevate your academic strategy with AI-driven intelligence.</p>
-      <Button onClick={() => (window as any).signInWithGoogle()} className="h-14 px-10 bg-claude-terracotta text-white rounded-claude-xl">Sign in with Google</Button>
+      <Button onClick={() => signInWithGoogle()} className="h-14 px-10 bg-claude-terracotta text-white rounded-claude-xl">Sign in with Google</Button>
     </div>
   );
 
@@ -489,7 +489,14 @@ export default function App() {
                </Card>
 
                <div className="space-y-8">
-                  <h3 className="text-3xl font-serif border-b border-claude-border-cream pb-6">Management Deck</h3>
+                  <div className="flex justify-between items-end border-b border-claude-border-cream pb-6">
+                     <h3 className="text-3xl font-serif">Management Deck</h3>
+                     {result && (
+                       <Button onClick={() => createClassroom(result)} className="bg-claude-near-black text-white rounded-full px-6 text-[10px] font-bold tracking-widest uppercase h-10 shadow-lg">
+                          Launch "{result.topicDetected}" as Class
+                       </Button>
+                     )}
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                      {myClassrooms.map((c, i) => (
                         <Card key={i} className="bg-white border-none shadow-claude-ring p-8 rounded-claude-3xl relative overflow-hidden group">
@@ -546,7 +553,7 @@ export default function App() {
                   <p className="text-sm text-claude-olive-gray">Select an extraction capacity to continue.</p>
                </div>
                <div className="space-y-4">
-                  {Object.entries(creditPacks).map(([id, p]) => (
+                  {Object.entries(creditPacks).map(([id, p]: [string, any]) => (
                     <button key={id} onClick={() => handleBuyCredits(id)} disabled={!!isBuying} className="w-full p-6 bg-white border border-claude-border-cream rounded-claude-2xl flex justify-between items-center group hover:border-claude-terracotta transition-all shadow-sm">
                        <div className="text-left">
                           <p className="font-bold text-claude-near-black group-hover:text-claude-terracotta">{p.name}</p>

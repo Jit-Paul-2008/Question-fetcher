@@ -40,11 +40,13 @@ async function runBackfill() {
     const vector = await getTopicEmbedding(topic);
     if (!vector) continue;
 
-    await pcIndex.upsert([{
-      id,
-      values: vector,
-      metadata: { topicDetected: topic, subject }
-    }]);
+    await pcIndex.upsert({
+      records: [{
+        id,
+        values: vector,
+        metadata: { topicDetected: topic, subject }
+      }]
+    });
 
     console.log(`✅ Vectorized ${topic}`);
   }
