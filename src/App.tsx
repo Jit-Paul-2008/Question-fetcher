@@ -3,7 +3,9 @@ import {
   Upload, Search, FileText, Download, CheckCircle2,
   Loader2, Camera, X, ChevronRight, BookOpen, Layers,
   LogOut, Coins, ShoppingCart, FlaskConical, FileBox,
+  Globe, Users, GraduationCap, Share2, Sparkles,
 } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -82,6 +84,13 @@ export default function App() {
   const [isBuying, setIsBuying] = useState<string | null>(null);
   const [razorpayKeyId, setRazorpayKeyId] = useState("");
   const [creditPacks, setCreditPacks] = useState<Record<string, CreditPack>>({});
+  const [activeTab, setActiveTab] = useState<"generator" | "library" | "classrooms">("generator");
+  const [libraryBanks, setLibraryBanks] = useState<any[]>([]);
+  const [isLibraryLoading, setIsLibraryLoading] = useState(false);
+  const [classroomCode, setClassroomCode] = useState("");
+  const [joinedClasses, setJoinedClasses] = useState<any[]>([]);
+  const [isJoining, setIsJoining] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const MAX_IMAGES = 8;
   const MAX_TOPICS = 5;
@@ -154,6 +163,31 @@ export default function App() {
     }, () => toast.error("Failed to load history."));
     return () => unsub();
   }, [user, isAuthReady]);
+
+  // ─── Library/Classroom Local Storage ──────────────────────────────────────
+  useEffect(() => {
+    const saved = localStorage.getItem("joined_classes");
+    if (saved) setJoinedClasses(JSON.parse(saved));
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("joined_classes", JSON.stringify(joinedClasses));
+  }, [joinedClasses]);
+
+  const fetchLibrary = async () => {
+    setIsLibraryLoading(true);
+    try {
+      const res = await fetch("/api/library");
+      const data = await res.json();
+      setLibraryBanks(data.banks || []);
+    } catch { toast.error("Failed to load library"); }
+    finally { setIsLibraryLoading(false); }
+  };
+
+  useEffect(() => {
+    if (activeTab === "library") fetchLibrary();
+  }, [activeTab]);
+
 
   // ─── File upload (Images, PDF, DOCX) ─────────────────────────────────────
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -242,6 +276,66 @@ export default function App() {
       setIsScanning(false);
     }
   };
+
+  const publishToLibrary = async (bank: ScanResult) => {
+    if (!user) return;
+    try {
+      const idToken = await user.getIdToken();
+      const res = await fetch("/api/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${idToken}` },
+        body: JSON.stringify({ bank }),
+      });
+      if (res.ok) toast.success("Success! Your question bank is now live in the Library.");
+      else toast.error("Failed to publish.");
+    } catch { toast.error("Error publishing."); }
+  };
+
+  const createClassroom = async (bank: ScanResult) => {
+    if (!user) return;
+    try {
+      const idToken = await user.getIdToken();
+      const res = await fetch("/api/classroom/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${idToken}` },
+        body: JSON.stringify({ bank }),
+      });
+      const data = await res.json();
+      if (data.code) {
+        toast.success(`Classroom Created! Code: ${data.code}`, { duration: 10000 });
+        // Auto copy to clipboard
+        navigator.clipboard.writeText(data.code);
+      }
+    } catch { toast.error("Error creating classroom."); }
+  };
+
+  const joinClassroom = async () => {
+    if (!user || !classroomCode) return;
+    setIsJoining(true);
+    try {
+      const idToken = await user.getIdToken();
+      const res = await fetch("/api/classroom/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${idToken}` },
+        body: JSON.stringify({ code: classroomCode }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setJoinedClasses(prev => [data, ...prev.filter(c => c.topicDetected !== data.topicDetected)]);
+        setResult(data);
+        setActiveTab("generator");
+        // Subtle celebration
+        toast.success("Joined Classroom! Success 🎉", { 
+          icon: <Sparkles className="w-5 h-5 text-amber-500 animate-bounce" />,
+          duration: 4000 
+        });
+      } else {
+        toast.error(data.error || "Invalid code.");
+      }
+    } catch { toast.error("Error joining classroom."); }
+    finally { setIsJoining(false); setClassroomCode(""); }
+  };
+
 
   // ─── Razorpay checkout ────────────────────────────────────────────────────
   const handleBuyCredits = async (packId: string) => {
@@ -379,12 +473,35 @@ export default function App() {
           </div>
           <h1 className="text-5xl md:text-6xl font-serif font-medium tracking-tight mb-4">ChemScan</h1>
           <p className="text-xl text-claude-olive-gray max-w-2xl mx-auto leading-relaxed">
-            Upload your notes → get a real question bank from PYQs, Sample Papers & HOTS
+            Extract high-quality questions for JEE, NEET & Boards in seconds.
           </p>
+
+          <nav className="flex items-center justify-center gap-4 mt-8">
+            <button
+              onClick={() => setActiveTab("generator")}
+              className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${activeTab === "generator" ? "bg-claude-terracotta text-white shadow-md" : "bg-white text-claude-olive-gray hover:bg-claude-warm-sand"}`}
+            >
+              <Search className="w-4 h-4 inline mr-2" /> Generator
+            </button>
+            <button
+              onClick={() => setActiveTab("library")}
+              className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${activeTab === "library" ? "bg-claude-terracotta text-white shadow-md" : "bg-white text-claude-olive-gray hover:bg-claude-warm-sand"}`}
+            >
+              <Globe className="w-4 h-4 inline mr-2" /> Library
+            </button>
+            <button
+              onClick={() => setActiveTab("classrooms")}
+              className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${activeTab === "classrooms" ? "bg-claude-terracotta text-white shadow-md" : "bg-white text-claude-olive-gray hover:bg-claude-warm-sand"}`}
+            >
+              <Users className="w-4 h-4 inline mr-2" /> Classrooms
+            </button>
+          </nav>
         </header>
 
-        {/* Main Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {activeTab === "generator" && (
+          <>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+
 
           {/* Left: Upload Panel */}
           <div className="lg:col-span-5 space-y-8">
@@ -570,16 +687,25 @@ export default function App() {
                         </CardDescription>
                       </div>
                       <div className="flex gap-2">
+                        <Button variant="ghost" size="sm" className="rounded-claude-md text-blue-600 hover:text-blue-700" onClick={() => publishToLibrary(result)}>
+                          <Share2 className="w-4 h-4 mr-2" />Publish
+                        </Button>
+                        <Button variant="ghost" size="sm" className="rounded-claude-md text-amber-600 hover:text-amber-700" onClick={() => createClassroom(result)}>
+                          <GraduationCap className="w-4 h-4 mr-2" />Class Code
+                        </Button>
+                        <Separator orientation="vertical" className="h-8 mx-2" />
                         <Button variant="warm-sand" size="sm" className="rounded-claude-md"
                           onClick={() => generateQuestionsPDF(result.topicDetected, result.questions, subject)}>
                           <Download className="w-4 h-4 mr-2" />PDF
                         </Button>
-                        <Button variant="warm-sand" size="sm" className="rounded-claude-md"
-                          onClick={() => generateQuestionsDocx(result.topicDetected, result.questions, subject)}>
-                          <FileText className="w-4 h-4 mr-2" />DOCX
-                        </Button>
                       </div>
                     </div>
+                    { (result as any).isPopular && (
+                      <Badge className="bg-amber-100 text-amber-700 border-none animate-pulse">
+                        <Sparkles className="w-3 h-3 mr-1" /> Popular Question Bank
+                      </Badge>
+                    )}
+
                   </CardHeader>
                   <CardContent className="space-y-8">
                     <div className="p-6 rounded-claude-xl bg-claude-parchment/60 border border-claude-border-cream">
@@ -702,7 +828,91 @@ export default function App() {
             </div>
           </div>
         )}
+      </>
+    )}
+
+    {activeTab === "library" && (
+          <div className="space-y-8 animate-in fade-in duration-500">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {isLibraryLoading ? (
+                Array(6).fill(0).map((_, i) => (
+                  <Card key={i} className="animate-pulse bg-claude-ivory h-40 border-none" />
+                ))
+              ) : libraryBanks.length > 0 ? (
+                libraryBanks.map((bank, i) => (
+                  <Card key={i} className="bg-white border-none shadow-claude-ring hover:shadow-claude-whisper transition-all cursor-pointer group rounded-claude-2xl overflow-hidden" onClick={() => { setResult(bank); setActiveTab("generator"); }}>
+                    <CardHeader className="pb-2">
+                       <div className="flex justify-between items-start mb-2">
+                          <Badge variant="outline" className="text-[10px] uppercase">{bank.subject || "Chemistry"}</Badge>
+                          <span className="text-[10px] text-claude-stone-gray">{new Date(bank.timestamp).toLocaleDateString()}</span>
+                       </div>
+                       <CardTitle className="text-lg group-hover:text-claude-terracotta transition-colors">{bank.topicDetected}</CardTitle>
+                       <CardDescription className="line-clamp-2 text-xs">{bank.summary}</CardDescription>
+                    </CardHeader>
+                    <CardContent className="pt-2">
+                       <div className="flex items-center justify-between text-xs text-claude-olive-gray">
+                          <span className="flex items-center gap-1"><Users className="w-3 h-3" /> By {bank.authorName}</span>
+                          <span className="font-bold text-claude-terracotta">{bank.questions?.length || 0} Questions</span>
+                       </div>
+                    </CardContent>
+                  </Card>
+                ))
+              ) : (
+                <div className="col-span-full text-center py-20 bg-white/50 rounded-claude-2xl border-2 border-dashed">
+                  <Globe className="w-12 h-12 mx-auto text-claude-stone-gray/30 mb-4" />
+                  <p className="text-claude-olive-gray">The library is currently empty. Be the first to publish!</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === "classrooms" && (
+          <div className="max-w-4xl mx-auto space-y-12 animate-in fade-in duration-500">
+            <Card className="bg-claude-terracotta text-white border-none shadow-claude-whisper p-8 text-center overflow-hidden relative">
+              <div className="relative z-10">
+                <h3 className="text-3xl font-serif mb-4">Enter Classroom Code</h3>
+                <p className="opacity-80 mb-8 max-w-sm mx-auto text-sm">Join your teacher's session to instantly access the shared question bank for free.</p>
+                <div className="flex gap-3 max-w-sm mx-auto">
+                   <Input 
+                      placeholder="e.g. SCAN-XY12" 
+                      className="bg-white/20 border-white/30 text-white placeholder:text-white/50 text-center text-2xl font-bold tracking-widest h-14"
+                      value={classroomCode}
+                      onChange={e => setClassroomCode(e.target.value.toUpperCase())}
+                   />
+                   <Button onClick={joinClassroom} disabled={isJoining || !classroomCode} className="h-14 px-8 bg-white text-claude-terracotta font-bold hover:bg-claude-ivory">
+                      {isJoining ? <Loader2 className="animate-spin" /> : "JOIN"}
+                   </Button>
+                </div>
+              </div>
+              <Users className="absolute -bottom-10 -right-10 w-48 h-48 opacity-10 rotate-12" />
+            </Card>
+
+            <div className="space-y-6">
+              <h4 className="text-xl font-serif font-medium flex items-center gap-2">
+                <Users className="w-5 h-5 text-claude-terracotta" /> Recently Joined Classes
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {joinedClasses.map((bank, i) => (
+                  <div key={i} className="p-4 bg-white rounded-claude-xl border border-claude-border-cream flex justify-between items-center hover:bg-claude-warm-sand transition-colors cursor-pointer" onClick={() => { setResult(bank); setActiveTab("generator"); }}>
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-full bg-claude-parchment flex items-center justify-center font-bold text-claude-terracotta">
+                        {bank.topicDetected?.[0]}
+                      </div>
+                      <div>
+                        <p className="font-bold text-sm">{bank.topicDetected}</p>
+                        <p className="text-[10px] text-claude-olive-gray uppercase font-bold tracking-widest">{bank.subject}</p>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-claude-stone-gray" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
+
 
       {/* ─── Buy Credits Modal ─────────────────────────────────────────────── */}
       {showBuyModal && (

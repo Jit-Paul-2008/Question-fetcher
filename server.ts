@@ -123,6 +123,14 @@ async function startServer() {
     return domains.size > 0 ? Array.from(domains) : EXAM_DOMAINS.default;
   }
 
+  // ─── Cache Key Generator (RAG) ─────────────────────────────────────────────
+  function getCacheKey(subject: string, topic: string, exams: string[]) {
+    const sortedExams = [...exams].sort().join(",");
+    const raw = `${subject.toLowerCase()}|${topic.toLowerCase().trim()}|${sortedExams}`;
+    return crypto.createHash("md5").update(raw).digest("hex");
+  }
+
+
   // ─── Razorpay: Create Order ───────────────────────────────────────────────
   app.post("/api/create-order", async (req, res) => {
     try {
@@ -296,6 +304,85 @@ async function startServer() {
     }
   });
 
+  // ─── COMMUNITY LIBRARY: Publish ───────────────────────────────────────────
+  app.post("/api/publish", async (req, res) => {
+    try {
+      const uid = await verifyToken(req.headers.authorization);
+      const { bank } = req.body;
+      if (!bank || !bank.questions) return res.status(400).json({ error: "No bank data provided" });
+
+      const userDoc = await db.doc(`users/${uid}/profile/data`).get();
+      const userName = userDoc.exists ? (userDoc.data()?.name || "Student") : "Student";
+
+      const docRef = db.collection("community_library").doc();
+      await docRef.set({
+        ...bank,
+        authorUid: uid,
+        authorName: userName,
+        downloads: 0,
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      res.json({ success: true, id: docRef.id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ─── COMMUNITY LIBRARY: Fetch ──────────────────────────────────────────────
+  app.get("/api/library", async (req, res) => {
+    try {
+      const snapshot = await db.collection("community_library")
+        .orderBy("timestamp", "desc")
+        .limit(20)
+        .get();
+      
+      const banks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      res.json({ banks });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ─── CLASSROOM: Create Code ────────────────────────────────────────────────
+  app.post("/api/classroom/create", async (req, res) => {
+    try {
+      const uid = await verifyToken(req.headers.authorization);
+      const { bank } = req.body;
+      if (!bank) return res.status(400).json({ error: "No bank data provided" });
+
+      // Generate a 6-digit alphanumeric code
+      const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+      
+      await db.collection("classrooms").doc(code).set({
+        ...bank,
+        creatorUid: uid,
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      res.json({ success: true, code });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ─── CLASSROOM: Join ───────────────────────────────────────────────────────
+  app.post("/api/classroom/join", async (req, res) => {
+    try {
+      await verifyToken(req.headers.authorization);
+      const { code } = req.body;
+      if (!code) return res.status(400).json({ error: "Code required" });
+
+      const doc = await db.collection("classrooms").doc(code.toUpperCase()).get();
+      if (!doc.exists) return res.status(404).json({ error: "Classroom not found" });
+
+      res.json({ success: true, ...doc.data() });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+
 
   // ─── SECURE SCAN PIPELINE ─────────────────────────────────────────────────
   // Exactly 2 Gemini calls + 3 Tavily searches, regardless of image/topic count
@@ -310,22 +397,6 @@ async function startServer() {
     }
 
     try {
-      // 2. Validate images
-      const { images, topic, subject, exams } = req.body;
-      const imageList: string[] = Array.isArray(images) ? images : (images ? [images] : []);
-      const MAX_IMAGES = 8;
-
-      if (imageList.length === 0 && (!topic || topic.trim().length === 0)) {
-        return res.status(400).json({ error: "Please provide either notes (images/PDF) or specific topics to scan." });
-      }
-      if (imageList.length > MAX_IMAGES) {
-        return res.status(400).json({
-          error: `Maximum ${MAX_IMAGES} files per scan. You uploaded ${imageList.length}.`
-        });
-      }
-
-      const examList = Array.isArray(exams) ? exams : [];
-
       // 3. Atomically check and deduct 1 credit
       const profileRef = db.doc(`users/${uid}/profile/data`);
       try {
@@ -342,7 +413,50 @@ async function startServer() {
         throw err;
       }
 
-      // 4. Get API keys
+      const { images, topic, subject, exams } = req.body;
+      const imageList: string[] = Array.isArray(images) ? images : (images ? [images] : []);
+      const MAX_IMAGES = 8;
+
+      if (imageList.length === 0 && (!topic || topic.trim().length === 0)) {
+        return res.status(400).json({ error: "Please provide either notes (images/PDF) or specific topics to scan." });
+      }
+      if (imageList.length > MAX_IMAGES) {
+        return res.status(400).json({
+          error: `Maximum ${MAX_IMAGES} files per scan. You uploaded ${imageList.length}.`
+        });
+      }
+
+      const examList = Array.isArray(exams) ? exams : [];
+      const subjectLabel = subject || "Chemistry";
+
+
+      // ─── RAG CACHE CHECK (Only for Topic-Only scans) ──────────────────────
+      let cachedData: any = null;
+      const isTopicOnly = imageList.length === 0;
+      const cacheKey = getCacheKey(subjectLabel, topic || "", examList);
+
+      if (isTopicOnly) {
+        const cacheRef = db.collection("global_cache").doc(cacheKey);
+        const cacheDoc = await cacheRef.get();
+        if (cacheDoc.exists) {
+          const data = cacheDoc.data()!;
+          const age = Date.now() - (data.timestamp?.toMillis() || 0);
+          const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+          
+          if (age < SEVEN_DAYS) {
+            console.log(`[Cache:HIT] key=${cacheKey} topic="${topic}"`);
+            return res.json({
+              topicDetected: data.topicDetected,
+              summary: data.summary,
+              keywords: data.keywords || [],
+              questions: data.questions || [],
+              isPopular: true // UI badge flag
+            });
+          }
+        }
+      }
+      console.log(`[Cache:MISS] key=${cacheKey} topic="${topic}"`);
+
       const geminiKey = process.env.GEMINI_API_KEY || process.env.chem1;
       const tavilyKey = process.env.TAVILY_API_KEY;
       if (!geminiKey || !tavilyKey) {
@@ -362,7 +476,6 @@ async function startServer() {
       const examLabels = examList.map(e => examMap[e] || e);
       const primaryExam = examLabels[0] || "exam";
       const allExams = examLabels.join(" ");
-      const subjectLabel = subject || "Chemistry";
 
       const contentParts: any[] = [];
       const docxTexts: string[] = [];
@@ -568,7 +681,6 @@ async function startServer() {
         return res.status(500).json({ error: `Question structuring failed: ${err.message}` });
       }
 
-      let structured: any = {};
       try {
         structured = JSON.parse(structuredText || "{}");
 
@@ -576,17 +688,12 @@ async function startServer() {
         if (structured.questions && Array.isArray(structured.questions)) {
           const uniqueTexts = new Set<string>();
           structured.questions = structured.questions.filter((q: any) => {
-            // 1. Remove URLs from source (Safety Fallback)
             if (q.source) {
               q.source = q.source.replace(/https?:\/\/[^\s]+/g, "").trim();
               if (!q.source) q.source = "Standard Practice Question";
             }
-
-            // 2. Strict Deduplication by text content
             const normalizedText = (q.text || "").toLowerCase().replace(/\s+/g, " ").trim();
-            if (!normalizedText || uniqueTexts.has(normalizedText)) {
-              return false;
-            }
+            if (!normalizedText || uniqueTexts.has(normalizedText)) return false;
             uniqueTexts.add(normalizedText);
             return true;
           });
@@ -598,28 +705,33 @@ async function startServer() {
       console.log(`[Scan] Extracted ${structured.questions?.length || 0} unique questions`);
 
       res.json({
-        topicDetected: analysis.topicDetected,
+        topicDetected: analysis.topicDetected || topic,
         summary: analysis.summary,
         keywords: analysis.keywords || [],
         questions: structured.questions || [],
       });
+
+      // ─── SAVE TO CACHE (Only for Topic-Only scans) ────────────────────────
+      if (isTopicOnly && structured.questions?.length > 0) {
+        db.collection("global_cache").doc(cacheKey).set({
+          topicDetected: analysis.topicDetected || topic,
+          summary: analysis.summary,
+          keywords: analysis.keywords || [],
+          questions: structured.questions,
+          subject: subjectLabel,
+          exams: examList,
+          timestamp: admin.firestore.FieldValue.serverTimestamp()
+        }).catch(err => console.error("[Cache:SaveError]", err));
+      }
+
     } catch (error: any) {
-      // Refund the credit if scan itself failed after deduction
       if (uid) {
         await db.doc(`users/${uid}/profile/data`)
           .update({ credits: admin.firestore.FieldValue.increment(1) })
-          .catch(() => { }); // best-effort refund
+          .catch(() => { });
       }
       console.error("Scan error details:", error);
-
-      const isHighDemand = error.message?.includes("503") || error.message?.includes("high demand") || error.status === 503;
-      let message = isHighDemand
-        ? "Google's AI servers are currently experiencing high demand. Please try again in 5-10 minutes."
-        : (error.message || "Internal server error");
-
-      if (error.code === "permission-denied" || (error.message && error.message.includes("credential"))) {
-        message = "Firebase Admin credential error. If running locally, please set up GOOGLE_APPLICATION_CREDENTIALS or run 'gcloud auth application-default login'.";
-      }
+      const message = error.message || "Internal server error";
       res.status(500).json({ error: message });
     }
   });
