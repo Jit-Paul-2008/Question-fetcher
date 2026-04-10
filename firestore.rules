@@ -49,22 +49,22 @@ service cloud.firestore {
              data.timestamp is number;
     }
 
-    match /users/{userId}/history/{historyId} {
+    match /users/{userId}/{allPaths=**} {
       allow read: if isOwner(userId);
-      allow create: if isOwner(userId) && isValidHistoryItem(request.resource.data, userId);
-      allow update: if false; // History items are immutable
-      allow delete: if isOwner(userId);
+      allow write: if isOwner(userId);
     }
 
-    match /users/{userId}/profile/data {
-      allow read: if isOwner(userId);
-      // Allow users to initialize their profile only with the starter 3 credits
-      allow create: if isOwner(userId) && request.resource.data.credits == 3;
-      // Block all client-side updates EXCEPT for initial welcome credit grant
-      allow update: if isOwner(userId) 
-                    && (!resource.data.keys().hasAll(['credits']) || resource.data.credits == null)
-                    && request.resource.data.credits == 3;
-      allow delete: if isOwner(userId);
+    match /classrooms/{code} {
+      allow read: if isAuthenticated();
+      allow delete: if isAuthenticated() && resource.data.creatorUid == request.auth.uid;
+    }
+
+    match /global_cache/{id} {
+      allow read: if isAuthenticated();
+    }
+
+    match /community_library/{id} {
+      allow read: if isAuthenticated();
     }
   }
 }

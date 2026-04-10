@@ -379,15 +379,21 @@ async function startServer() {
       const { bank } = req.body;
       if (!bank) return res.status(400).json({ error: "No bank data provided" });
 
+      // Get host name from Firebase Auth
+      const userRecord = await admin.auth().getUser(uid);
+      const creatorName = userRecord.displayName || "Verified User";
+
       // Generate a 6-digit alphanumeric code
       const code = Math.random().toString(36).substring(2, 8).toUpperCase();
 
       await db.collection("classrooms").doc(code).set({
         ...bank,
         creatorUid: uid,
+        creatorName,
         timestamp: admin.firestore.FieldValue.serverTimestamp()
       });
 
+      console.log(`[Host:Collab] uid=${uid} name=${creatorName} code=${code}`);
       res.json({ success: true, code });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -408,7 +414,7 @@ async function startServer() {
       // Increment student count for the teacher dashboard
       await classroomRef.update({
         memberCount: admin.firestore.FieldValue.increment(1)
-      }).catch(() => {});
+      }).catch(() => { });
 
       res.json({ success: true, ...doc.data() });
     } catch (err: any) {
@@ -670,8 +676,8 @@ async function startServer() {
         for (const r of (sr.results || [])) {
           if (!seenUrls.has(r.url)) {
             seenUrls.add(r.url);
-            // Trim to 1500 chars — enough to capture full questions + options from most sources
-            const snippet = (r.content || "").slice(0, 1500).trim();
+            // Trim to 2500 chars — enough to capture full questions + options from most sources
+            const snippet = (r.content || "").slice(0, 2500).trim();
             if (snippet) combined.push(`[Source: ${r.url}]\n${snippet}`);
           }
         }
@@ -692,8 +698,8 @@ async function startServer() {
         "- **Detailed Source Instruction**: Specify where the question is from in detail (e.g., 'PYQ 2023 JEE Mains', 'NEET 2021', 'CBSE Board 2020').",
         "- **NO LINKS**: Do NOT include any URLs or web links in the source field. Use only text describing the source.",
         "- **NO REPETITION**: Do not provide duplicate questions. Each question must be unique in content and phrasing.",
-        `- Aim for 25-30 high-quality, unique questions. Stay within ${subjectLabel}: "${analysis.topicDetected}".`,
-        "- If the search results do not contain enough questions, supplement with your EXPERT knowledge of exam-style questions for this topic — do not stop short.",
+        `- Generate between 25 and 35 questions. Minimum 12 required. Stay within ${subjectLabel}: "${analysis.topicDetected}".`,
+        "- If the search results do not contain enough questions, supplement with your EXPERT knowledge of exam-style questions for this topic — you MUST reach at least 12 questions.",
         "",
         combined.length > 0 ? `Search Results:\n${combined.join("\n---\n")}` : "No search results available. Proceed with expert generation.",
       ].join("\n");
@@ -703,30 +709,35 @@ async function startServer() {
           model: "gemini-3.1-flash-lite-preview",
           contents: structurePrompt,
           config: {
+            maxOutputTokens: 4096,
+            temperature: 0.1,
             responseMimeType: "application/json",
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                questions: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      text: { type: Type.STRING },
-                      options: { type: Type.ARRAY, items: { type: Type.STRING } },
-                      answer: { type: Type.STRING },
-                      source: { type: Type.STRING },
-                      year: { type: Type.STRING },
-                      type: { type: Type.STRING },
-                      topic: { type: Type.STRING },
+            config: {
+              responseMimeType: "application/json",
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  questions: {
+                    type: Type.ARRAY,
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        question: { type: Type.STRING },
+                        options: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        correctAnswer: { type: Type.STRING },
+                        source: { type: Type.STRING },
+                        year: { type: Type.STRING },
+                        difficulty: { type: Type.STRING },
+                        targetExam: { type: Type.STRING },
+                        topic: { type: Type.STRING },
+                      },
+                      required: ["question", "options", "correctAnswer", "source", "year", "difficulty", "targetExam", "topic"],
                     },
-                    required: ["text", "options", "answer", "source", "year", "type", "topic"],
                   },
                 },
+                required: ["questions"],
               },
-              required: ["questions"],
             },
-          },
         })
       );
 
@@ -837,6 +848,19 @@ async function startServer() {
 
       // Temporary simple links (semantic clustering will happen via Pinecone later)
       const links: any[] = [];
+      
+      // Semantic Linker: Connect nodes sharing same subject or similar keywords
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const n1 = nodes[i];
+          const n2 = nodes[j];
+          
+          if (n1.subject === n2.subject) {
+            links.push({ source: n1.id, target: n2.id, value: 1 });
+          }
+        }
+      }
+
       res.json({ nodes, links });
     } catch (err) {
       console.error("[GraphData:Error]", err);
