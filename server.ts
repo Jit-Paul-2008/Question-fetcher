@@ -139,6 +139,9 @@ async function startServer() {
       }
     });
 
+    // Add high-authority domains that cover all K-12 and competitive prep
+    ["byjus.com", "toppr.com", "vedantu.com", "shaalaa.com", "careers360.com", "selfstudys.com", "pw.live", "doubtnut.com", "unacademy.com", "embibe.com"].forEach(d => domains.add(d));
+
     return domains.size > 0 ? Array.from(domains) : EXAM_DOMAINS.default;
   }
 
@@ -444,7 +447,7 @@ async function startServer() {
         throw err;
       }
 
-      const { images, topic, subject, exams } = req.body;
+      const { images, topic, subject, exams, targetClass } = req.body;
       const imageList: string[] = Array.isArray(images) ? images : (images ? [images] : []);
       const MAX_IMAGES = 8;
 
@@ -560,10 +563,11 @@ async function startServer() {
           // ── TOPIC ONLY MODE ──
           const topicPrompt = [
             `You are assisting a student preparing for: ${examLabels.join(", ")}.`,
+            `Target Class: ${targetClass || "12"}.`,
             `Subject: ${subjectLabel}. Topics provided: "${topic}".`,
             "",
             "STEP 1 — Brainstorm Search Queries:",
-            "Based on the provided topics, generate 3 highly targeted search queries to find real exam questions.",
+            "Based on the provided academic level and topics, generate 3 highly targeted search queries to find real exam questions.",
             "Distribute the topics across the 3 queries.",
             `Query 1: Focus on core PYQs for: ${topic}.`,
             `Query 2: Focus on Sample Paper MCQs and detailed solutions for: ${topic}.`,

@@ -42,6 +42,19 @@ const EXAM_OPTIONS = [
   { id: "wbsche-12", label: "12th WBSCHE" },
 ];
 
+const EXAMS = [
+  { id: "jee-mains", name: "JEE Mains" },
+  { id: "jee-advanced", name: "JEE Advanced" },
+  { id: "cbse-12", name: "CBSE 12" },
+  { id: "cbse-10", name: "CBSE 10" },
+  { id: "neet", name: "NEET" },
+  { id: "icse-10", name: "ICSE 10" },
+  { id: "isc-12", name: "ISC 12" },
+  { id: "wbsche-12", name: "WBSCHE 12" }
+];
+
+const CLASSES = ["9", "10", "11", "12", "Graduation"];
+
 const SUBJECTS = [
   { group: "Science", items: ["Physics", "Chemistry", "Biology", "Mathematics", "Computer Science", "Environmental Science"] },
   { group: "Commerce", items: ["Business Studies", "Accountancy", "Economics"] },
@@ -78,6 +91,7 @@ export default function App() {
   const [topic, setTopic] = useState("");
   const [subject, setSubject] = useState("Chemistry");
   const [selectedExams, setSelectedExams] = useState<string[]>([]);
+  const [targetClass, setTargetClass] = useState("12");
   const [isScanning, setIsScanning] = useState(false);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -197,7 +211,7 @@ export default function App() {
     setIsScanning(true);
     try {
       const idToken = await user!.getIdToken();
-      const scanResult = await scanSubjectNote(scanMode === "notes" ? images : [], topic, subject, selectedExams, idToken);
+      const scanResult = await scanSubjectNote(scanMode === "notes" ? images : [], topic, subject, selectedExams, targetClass, idToken);
       setResult(scanResult);
       setCredits(prev => prev - 1);
       await addDoc(collection(db, `users/${user!.uid}/history`), {
@@ -374,6 +388,38 @@ export default function App() {
                             {SUBJECTS.flatMap(g => g.items).map(s => <option key={s} value={s}>{s}</option>)}
                          </select>
                       </div>
+
+                      <div className="space-y-4 pt-2">
+                         <div className="flex justify-between items-center mb-1">
+                            <Label className="uppercase text-[10px] font-bold tracking-[0.2em] text-claude-stone-gray ml-1">Target Context</Label>
+                         </div>
+                         <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                               <span className="text-[9px] uppercase font-bold text-claude-stone-gray/60 px-1">Class Level</span>
+                               <select value={targetClass} onChange={e => setTargetClass(e.target.value)} className="w-full h-12 bg-white rounded-claude-xl border border-claude-border-cream px-3 text-sm">
+                                  {CLASSES.map(c => <option key={c} value={c}>Class {c}</option>)}
+                               </select>
+                            </div>
+                            <div className="space-y-1.5">
+                               <span className="text-[9px] uppercase font-bold text-claude-stone-gray/60 px-1">Target Exams</span>
+                               <div className="h-12 flex items-center gap-1.5 overflow-x-auto no-scrollbar scroll-smooth">
+                                  {EXAMS.map(ex => {
+                                    const isSelected = selectedExams.includes(ex.id);
+                                    return (
+                                      <button 
+                                        key={ex.id} 
+                                        onClick={() => setSelectedExams(prev => isSelected ? prev.filter(id => id !== ex.id) : [...prev, ex.id])}
+                                        className={`flex-shrink-0 px-3 h-8 rounded-full text-[9px] font-bold border transition-all ${isSelected ? "bg-claude-terracotta border-claude-terracotta text-white shadow-sm" : "border-claude-border-cream text-claude-stone-gray hover:border-claude-terracotta"}`}
+                                      >
+                                        {ex.name}
+                                      </button>
+                                    )
+                                  })}
+                               </div>
+                            </div>
+                         </div>
+                      </div>
+
                       <Button onClick={handleScan} disabled={isScanning} className="w-full h-16 bg-claude-terracotta hover:bg-claude-terracotta/90 text-white font-bold rounded-claude-2xl mt-4 shadow-lg text-sm uppercase tracking-widest">
                         {isScanning ? <Loader2 className="animate-spin" /> : <Sparkles className="w-5 h-5 mr-3" />}
                         {isScanning ? "Engaging AI Synth..." : "Initiate Extraction"}

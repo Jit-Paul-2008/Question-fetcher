@@ -20,6 +20,7 @@ export async function scanSubjectNote(
   userTopic: string,
   subject: string,
   exams: string[],
+  targetClass: string,
   idToken: string
 ): Promise<ScanResult> {
   const API_BASE = window.location.origin;
@@ -30,7 +31,7 @@ export async function scanSubjectNote(
       "Content-Type": "application/json",
       "Authorization": `Bearer ${idToken}`,
     },
-    body: JSON.stringify({ images, topic: userTopic, subject, exams })
+    body: JSON.stringify({ images, topic: userTopic, subject, exams, targetClass })
   });
 
   if (!response.ok) {
