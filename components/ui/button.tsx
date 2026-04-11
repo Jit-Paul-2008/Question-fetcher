@@ -9,18 +9,18 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-claude-terracotta text-claude-ivory hover:bg-claude-terracotta/90 shadow-claude-whisper rounded-claude-lg",
-        terracotta: "bg-claude-terracotta text-claude-ivory hover:bg-claude-terracotta/90 shadow-claude-whisper rounded-claude-lg",
-        "warm-sand": "bg-claude-warm-sand text-claude-near-black hover:bg-claude-warm-sand/80 shadow-claude-ring rounded-claude-md",
+        default: "bg-primary text-primary-foreground hover:bg-primary/90 shadow-royal-glow rounded-royal-lg",
+        terracotta: "bg-primary text-primary-foreground hover:bg-primary/90 shadow-royal-glow rounded-royal-lg",
+        "warm-sand": "bg-secondary text-secondary-foreground hover:bg-secondary/80 shadow-sm rounded-royal-md",
         outline:
-          "border-claude-border-cream bg-transparent hover:bg-claude-warm-sand/50 hover:text-claude-near-black dark:border-claude-border-dark dark:hover:bg-claude-dark-surface rounded-claude-lg",
+          "border-border bg-transparent hover:bg-accent/10 hover:text-accent-foreground rounded-royal-lg",
         secondary:
-          "bg-claude-warm-sand text-claude-near-black hover:bg-claude-warm-sand/80 rounded-claude-md",
+          "bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-royal-md",
         ghost:
-          "hover:bg-claude-warm-sand/50 hover:text-claude-near-black dark:hover:bg-claude-dark-surface rounded-claude-md",
+          "hover:bg-accent/10 hover:text-accent-foreground rounded-royal-md",
         destructive:
-          "bg-claude-crimson text-claude-ivory hover:bg-claude-crimson/90 rounded-claude-lg",
-        link: "text-claude-terracotta underline-offset-4 hover:underline",
+          "bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-royal-lg",
+        link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
         default:

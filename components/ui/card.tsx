@@ -12,7 +12,7 @@ function Card({
       data-slot="card"
       data-size={size}
       className={cn(
-        "group/card flex flex-col gap-4 overflow-hidden rounded-claude-xl bg-claude-ivory py-4 text-sm text-claude-near-black ring-1 ring-claude-border-cream shadow-claude-whisper has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:gap-3 data-[size=sm]:py-3 data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-claude-xl *:[img:last-child]:rounded-b-claude-xl",
+        "group/card flex flex-col gap-4 overflow-hidden rounded-royal-xl bg-card py-4 text-sm text-card-foreground ring-1 ring-border shadow-sm has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:gap-3 data-[size=sm]:py-3 data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-royal-xl *:[img:last-child]:rounded-b-royal-xl",
         className
       )}
       {...props}
@@ -38,7 +38,7 @@ function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="card-title"
       className={cn(
-        "font-serif text-lg leading-snug font-medium text-claude-near-black group-data-[size=sm]/card:text-base",
+        "font-serif text-lg leading-snug font-medium text-card-foreground group-data-[size=sm]/card:text-base",
         className
       )}
       {...props}

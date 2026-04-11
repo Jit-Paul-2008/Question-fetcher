@@ -5,20 +5,16 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const badgeVariants = cva(
-  "group/badge inline-flex h-5 w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-4xl border border-transparent px-2 py-0.5 text-xs font-medium whitespace-nowrap transition-all focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&>svg]:pointer-events-none [&>svg]:size-3!",
+  "group/badge inline-flex h-5 w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-full border border-transparent px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest transition-all focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 [&>svg]:pointer-events-none [&>svg]:size-3",
   {
     variants: {
       variant: {
-        default: "bg-claude-terracotta text-claude-ivory hover:bg-claude-terracotta/90",
-        secondary:
-          "bg-claude-warm-sand text-claude-near-black hover:bg-claude-warm-sand/80",
-        destructive:
-          "bg-claude-crimson text-claude-ivory hover:bg-claude-crimson/90",
-        outline:
-          "border-claude-border-cream text-claude-near-black hover:bg-claude-warm-sand/50",
-        ghost:
-          "hover:bg-claude-warm-sand/50 hover:text-claude-near-black dark:hover:bg-claude-dark-surface",
-        link: "text-claude-terracotta underline-offset-4 hover:underline",
+        default: "bg-primary text-primary-foreground shadow-sm",
+        secondary: "bg-secondary text-secondary-foreground border-border",
+        destructive: "bg-destructive text-destructive-foreground",
+        outline: "border-border text-foreground/70",
+        ghost: "hover:bg-accent/10 text-foreground/70",
+        link: "text-primary underline-offset-4 hover:underline",
       },
     },
     defaultVariants: {
@@ -32,14 +28,14 @@ function Badge({
   variant = "default",
   render,
   ...props
-}: useRender.ComponentProps<"span"> & VariantProps<typeof badgeVariants>) {
+}: any & VariantProps<typeof badgeVariants>) {
   return useRender({
     defaultTagName: "span",
     props: mergeProps<"span">(
       {
         className: cn(badgeVariants({ variant }), className),
       },
-      props
+      props as any
     ),
     render,
     state: {

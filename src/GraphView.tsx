@@ -110,7 +110,7 @@ export default function GraphView() {
             </div>
             
             {/* Legend */}
-            <div className="absolute bottom-8 left-8 flex flex-wrap gap-6 glass-dark p-4 px-6 rounded-2xl z-10 border border-royal-border-gold/30">
+            <div className="absolute bottom-8 left-8 flex flex-wrap gap-6 glass-dark p-4 px-6 rounded-royal-2xl z-10 border border-royal-border-gold/30">
               {Object.entries(SUBJECT_COLORS).map(([sub, color]) => (
                 <div key={sub} className="flex items-center gap-2.5">
                   <div className="w-3 h-3 rounded-full shadow-[0_0_8px_rgba(212,175,55,0.3)]" style={{ backgroundColor: color }} />
@@ -149,7 +149,7 @@ export default function GraphView() {
             </p>
           </Card>
           
-          <div className="glass bg-primary p-8 rounded-royal-3xl text-white shadow-2xl relative overflow-hidden group">
+          <div className="glass bg-primary p-8 rounded-royal-3xl text-primary-foreground shadow-2xl relative overflow-hidden group">
             <div className="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-110 transition-transform duration-700">
                <FlaskConical className="w-32 h-32" />
             </div>

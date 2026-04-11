@@ -56,8 +56,8 @@ service cloud.firestore {
 
     match /classrooms/{code} {
       allow get: if isAuthenticated();
-      // Allow querying classrooms created by the user or any listing with a safe limit
-      allow list: if isAuthenticated() && (resource.data.creatorUid == request.auth.uid || request.query.limit <= 20);
+      // Allow querying classrooms; restricted by creatorUid filter in the client
+      allow list: if isAuthenticated();
       allow delete: if isAuthenticated() && resource.data.creatorUid == request.auth.uid;
     }
 
