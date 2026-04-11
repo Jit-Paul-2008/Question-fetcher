@@ -40,6 +40,8 @@ export function BuyModal({
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
             {plans.map((plan) => (
+              <div
+                key={plan.label}
                 className={`bg-card p-12 flex flex-col items-center text-center relative group hover:shadow-2xl transition-all duration-700 rounded-[3rem] ${plan.popular ? 'bg-muted/30 shadow-xl' : 'shadow-terra-soft'}`}
               >
                 {plan.popular && (

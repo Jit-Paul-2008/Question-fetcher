@@ -143,9 +143,10 @@ export function GeneratorWindow({
                     </button>
                   ))}
                 </div>
-              </div>
             </div>
+          </div>
         </div>
+      </div>
 
         {/* Main Interaction Area */}
         <div className="flex-1">
