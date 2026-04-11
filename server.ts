@@ -42,7 +42,7 @@ const FREE_WELCOME_CREDITS = 3;
 const pc = new Pinecone({ apiKey: process.env.PINECONE_API_KEY || "" });
 const pcIndex = pc.index("chemscan");
 const genAIEmbed = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
-const embedModel = genAIEmbed.getGenerativeModel({ model: "text-embedding-004" });
+const embedModel = genAIEmbed.getGenerativeModel({ model: "embedding-001" });
 
 async function getTopicEmbedding(text: string) {
   try {

@@ -2,51 +2,51 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Marcellus&family=Alex+Brush&display=swap');
 
 :root {
-  --background: 60 11% 99%;
-  --foreground: 60 2% 11%;
+  --background: 140 33% 97%; /* Emerald Mist */
+  --foreground: 162 86% 10%; /* Deep Emerald Text */
   --card: 0 0% 100%;
-  --card-foreground: 60 2% 11%;
+  --card-foreground: 162 86% 10%;
   --popover: 0 0% 100%;
-  --popover-foreground: 60 2% 11%;
-  --primary: 14 62% 50%;
-  --primary-foreground: 60 11% 99%;
-  --secondary: 50 20% 93%;
-  --secondary-foreground: 50 5% 30%;
-  --muted: 50 20% 93%;
-  --muted-foreground: 50 5% 40%;
-  --accent: 50 20% 93%;
-  --accent-foreground: 60 2% 11%;
-  --destructive: 0 54% 50%;
-  --destructive-foreground: 60 11% 99%;
-  --border: 50 20% 91%;
-  --input: 50 20% 91%;
-  --ring: 50 10% 83%;
-  --radius: 1.25rem;
+  --popover-foreground: 162 86% 10%;
+  --primary: 45 61% 52%; /* Antique Gold */
+  --primary-foreground: 140 33% 97%;
+  --secondary: 45 61% 94%; /* Soft Cream */
+  --secondary-foreground: 162 86% 10%;
+  --muted: 154 25% 90%;
+  --muted-foreground: 162 20% 40%;
+  --accent: 45 61% 52%;
+  --accent-foreground: 140 33% 97%;
+  --destructive: 0 84% 40%;
+  --destructive-foreground: 140 33% 97%;
+  --border: 45 61% 85%;
+  --input: 45 61% 85%;
+  --ring: 45 61% 52%;
+  --radius: 0.5rem; /* Sharper for Royal feel */
 }
 
 .dark {
-  --background: 60 5% 6%;
-  --foreground: 50 20% 98%;
-  --card: 60 2% 11%;
-  --card-foreground: 50 20% 98%;
-  --popover: 60 2% 11%;
-  --popover-foreground: 50 20% 98%;
-  --primary: 14 62% 50%;
-  --primary-foreground: 50 20% 98%;
-  --secondary: 60 2% 11%;
-  --secondary-foreground: 50 20% 98%;
-  --muted: 60 2% 11%;
-  --muted-foreground: 51 5% 65%;
-  --accent: 60 2% 11%;
-  --accent-foreground: 50 20% 98%;
-  --destructive: 0 54% 50%;
-  --destructive-foreground: 50 20% 98%;
-  --border: 60 2% 11%;
-  --input: 60 2% 11%;
-  --ring: 60 2% 11%;
+  --background: 162 86% 6%; /* Forest Night */
+  --foreground: 140 33% 97%;
+  --card: 162 86% 8%;
+  --card-foreground: 140 33% 97%;
+  --popover: 162 86% 8%;
+  --popover-foreground: 140 33% 97%;
+  --primary: 45 61% 52%; /* Gold remains the same */
+  --primary-foreground: 162 86% 6%;
+  --secondary: 162 86% 10%;
+  --secondary-foreground: 140 33% 97%;
+  --muted: 162 86% 10%;
+  --muted-foreground: 154 20% 60%;
+  --accent: 45 61% 52%;
+  --accent-foreground: 160 84% 97%;
+  --destructive: 0 62% 30%;
+  --destructive-foreground: 140 33% 97%;
+  --border: 162 86% 15%;
+  --input: 162 86% 15%;
+  --ring: 45 61% 52%;
 }
 
 @layer base {
@@ -55,16 +55,21 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Montserrat', sans-serif;
     background-image: 
-      radial-gradient(at 0% 0%, rgba(209, 86, 49, 0.03) 0px, transparent 50%),
-      radial-gradient(at 100% 0%, rgba(209, 86, 49, 0.03) 0px, transparent 50%);
+      radial-gradient(at 0% 0%, rgba(212, 175, 55, 0.05) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, rgba(212, 175, 55, 0.05) 0px, transparent 50%);
     background-attachment: fixed;
   }
   h1, h2, h3, h4, h5, h6 {
     @apply font-serif tracking-tight;
-    font-family: 'Playfair Display', serif;
+    font-family: 'Marcellus', serif;
   }
+}
+
+.calligraphy {
+  font-family: 'Alex Brush', cursive;
+  @apply text-primary italic lowercase;
 }
 
 @layer utilities {

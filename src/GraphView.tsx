@@ -23,11 +23,11 @@ interface GraphData {
 }
 
 const SUBJECT_COLORS: Record<string, string> = {
-  "Chemistry": "#f59e0b", // Amber
-  "Physics": "#3b82f6",    // Blue
-  "Biology": "#10b981",    // Green
-  "Maths": "#8b5cf6",      // Purple
-  "General": "#6b7280"     // Gray
+  "Chemistry": "#d4af37", // Gold
+  "Physics": "#34d399",    // Emerald
+  "Biology": "#b45309",    // Amber/Bronze
+  "Maths": "#6366f1",      // Indigo
+  "General": "#94a3b8"     // Slate
 };
 
 export default function GraphView() {
@@ -60,9 +60,9 @@ export default function GraphView() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-[600px] bg-claude-ivory rounded-claude-2xl border border-claude-border-cream">
-        <Loader2 className="w-10 h-10 text-claude-terracotta animate-spin mb-4" />
-        <p className="text-claude-olive-gray font-medium">Visualizing your database...</p>
+      <div className="flex flex-col items-center justify-center h-[600px] bg-card rounded-royal-2xl border border-royal-border-gold shadow-inner">
+        <Loader2 className="w-10 h-10 text-royal-gold animate-spin mb-4" />
+        <p className="text-royal-muted-foreground font-serif italic">Visualizing the knowledge tapestry...</p>
       </div>
     );
   }
@@ -71,16 +71,20 @@ export default function GraphView() {
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-1000">
       <div className="flex flex-col xl:flex-row gap-8 items-start">
         <div className="w-full xl:w-[78%]">
-          <Card className="premium-card border-none shadow-claude-whisper bg-white/50 backdrop-blur-sm rounded-claude-3xl overflow-hidden relative min-h-[650px] border border-white/40">
-            <CardHeader className="absolute top-0 left-0 z-10 p-10 bg-gradient-to-b from-white via-white/40 to-transparent w-full pointer-events-none">
-              <CardTitle className="flex items-center gap-4 text-4xl font-serif pointer-events-auto text-gradient">
-                <Zap className="w-8 h-8 text-primary shadow-primary/20" />
-                Knowledge Universe
-              </CardTitle>
-              <CardDescription className="text-muted-foreground text-base max-w-xl mt-2 pointer-events-auto leading-relaxed">
-                A globally shared semantic map of all human knowledge discovered on ChemScan. 
-                Connected nodes share deep logical relationships and cross-disciplinary overlaps.
-              </CardDescription>
+          <Card className="premium-card border-none shadow-royal-glow bg-card backdrop-blur-md rounded-royal-3xl overflow-hidden relative min-h-[650px] border border-royal-border-gold/20">
+            <CardHeader className="absolute top-0 left-0 z-10 p-10 bg-gradient-to-b from-card via-card/40 to-transparent w-full pointer-events-none">
+              <div className="flex justify-between items-start pointer-events-auto">
+                <div>
+                  <CardTitle className="flex items-center gap-4 text-4xl font-serif text-gradient">
+                    <Zap className="w-8 h-8 text-primary shadow-primary/20" />
+                    Knowledge Universe
+                  </CardTitle>
+                  <CardDescription className="text-muted-foreground text-sm max-w-xl mt-2 leading-relaxed font-serif italic">
+                    Connected nodes share deep logical relationships and cross-disciplinary overlaps.
+                  </CardDescription>
+                </div>
+                <div className="calligraphy text-2xl text-royal-gold opacity-60 lowercase pr-4">universal sync</div>
+              </div>
             </CardHeader>
             
             <div className="w-full h-[650px] cursor-grab active:cursor-grabbing">
@@ -91,7 +95,7 @@ export default function GraphView() {
                 nodeColor={n => (n as GraphNode).color || "#ccc"}
                 nodeRelSize={9}
                 linkWidth={2}
-                linkColor={() => "#d1563122"}
+                linkColor={() => "#d4af3744"}
                 linkDirectionalParticles={3}
                 linkDirectionalParticleSpeed={0.007}
                 backgroundColor="transparent"
@@ -106,11 +110,11 @@ export default function GraphView() {
             </div>
             
             {/* Legend */}
-            <div className="absolute bottom-8 left-8 flex flex-wrap gap-6 glass p-4 rounded-2xl z-10">
+            <div className="absolute bottom-8 left-8 flex flex-wrap gap-6 glass-dark p-4 px-6 rounded-2xl z-10 border border-royal-border-gold/30">
               {Object.entries(SUBJECT_COLORS).map(([sub, color]) => (
                 <div key={sub} className="flex items-center gap-2.5">
-                  <div className="w-4 h-4 rounded-full shadow-lg" style={{ backgroundColor: color }} />
-                  <span className="text-[11px] font-bold text-foreground/70 uppercase tracking-[0.1em]">{sub}</span>
+                  <div className="w-3 h-3 rounded-full shadow-[0_0_8px_rgba(212,175,55,0.3)]" style={{ backgroundColor: color }} />
+                  <span className="text-[9px] font-black text-white/70 uppercase tracking-[0.2em]">{sub}</span>
                 </div>
               ))}
             </div>
@@ -118,15 +122,16 @@ export default function GraphView() {
         </div>
 
         <div className="w-full xl:w-[22%] space-y-8">
-          <Card className="premium-card border-none shadow-claude-whisper bg-white rounded-claude-3xl p-8 border border-white/60">
-            <h3 className="text-2xl font-serif font-medium mb-6 text-foreground">Global Insights</h3>
-            <div className="space-y-6">
-              <div className="space-y-2">
+          <Card className="premium-card border-none shadow-royal-glow bg-card rounded-royal-3xl p-8 border border-royal-gold/10 relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-4 calligraphy text-xl opacity-10">Insights</div>
+            <h3 className="text-2xl font-serif font-medium mb-8 text-foreground pb-2 border-b border-royal-gold/20">Global Metrics</h3>
+            <div className="space-y-8">
+              <div className="space-y-3">
                 <div className="flex items-center gap-3">
-                  <LayoutPanelLeft className="w-5 h-5 text-primary" />
-                  <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Total Entities</span>
+                  <LayoutPanelLeft className="w-5 h-5 text-royal-gold" />
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Topics Discovered</span>
                 </div>
-                <div className="text-5xl font-serif font-medium text-foreground">{data.nodes.length}</div>
+                <div className="text-6xl font-serif font-medium text-foreground">{data.nodes.length}</div>
               </div>
 
               <Separator className="bg-border/60" />
@@ -144,7 +149,7 @@ export default function GraphView() {
             </p>
           </Card>
           
-          <div className="glass bg-primary p-8 rounded-claude-3xl text-white shadow-2xl relative overflow-hidden group">
+          <div className="glass bg-primary p-8 rounded-royal-3xl text-white shadow-2xl relative overflow-hidden group">
             <div className="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-110 transition-transform duration-700">
                <FlaskConical className="w-32 h-32" />
             </div>
