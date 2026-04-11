@@ -562,7 +562,7 @@ async function startServer() {
 
           const response = await withRetry(() =>
             ai.models.generateContent({
-              model: "gemini-2.0-flash-lite-preview",
+              model: "gemini-3.1-flash-lite-preview",
               contents: { parts: [{ text: topicPrompt }] },
               config: {
                 responseMimeType: "application/json",
@@ -600,7 +600,7 @@ async function startServer() {
 
           const analysisResponse = await withRetry(() =>
             ai.models.generateContent({
-              model: "gemini-2.0-flash-lite-preview",
+              model: "gemini-3.1-flash-lite-preview",
               contents: { parts: [...contentParts, { text: analysisPrompt }] },
               config: {
                 responseMimeType: "application/json",
