@@ -1,49 +1,75 @@
 import { useState } from "react";
 import { User } from "firebase/auth";
-import { db } from "@/src/lib/firebase";
+import { db } from "../lib/firebase";
 import { collection, addDoc } from "firebase/firestore";
 import { toast } from "sonner";
-import { scanSubjectNote, ScanResult } from "@/src/lib/gemini";
-import { ScanMode } from "../lib/types";
+import { scanSubjectNote, ScanResult } from "../lib/gemini";
+import { ScanStatus } from "../lib/types";
 
-export function useScanner(user: User | null, credits: number, setCredits: (c: number | ((p: number) => number)) => void) {
-  const [isScanning, setIsScanning] = useState(false);
+export function useScanner(user: User | null, credits: number, setCredits?: (c: number) => void) {
+  const [status, setStatus] = useState<ScanStatus>("idle");
+  const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<ScanResult | null>(null);
-  const [currentQuestionIdx, setCurrentQuestionIdx] = useState(0);
 
-  const handleScan = async (scanMode: ScanMode, images: string[], topic: string, subject: string, selectedExams: string[], targetClass: string) => {
+  const performScan = async (mode: "notes" | "topics", data: string[] | File) => {
     if (!user) return;
     if (credits <= 0) {
-       toast.error("Insufficient units. Please top up.");
-       return "NEED_CREDITS";
+      toast.error("Low discovery units. Please top up.");
+      return;
     }
-    
-    setIsScanning(true);
+
+    setStatus("uploading");
+    setProgress(30);
+
     try {
       const idToken = await user.getIdToken();
-      const scanResult = await scanSubjectNote(scanMode === "notes" ? images : [], topic, subject, selectedExams, targetClass, idToken);
-      
+      let scanResult: ScanResult;
+
+      if (mode === "notes" && data instanceof File) {
+          // Convert file to base64 for the API
+          const reader = new FileReader();
+          const base64Promise = new Promise<string>((resolve) => {
+              reader.onload = () => resolve(reader.result as string);
+              reader.readAsDataURL(data);
+          });
+          const base64 = await base64Promise;
+          
+          setStatus("processing");
+          setProgress(60);
+          scanResult = await scanSubjectNote([base64], "", "Science", [], "General", idToken);
+      } else if (mode === "topics" && Array.isArray(data)) {
+          setStatus("processing");
+          setProgress(60);
+          scanResult = await scanSubjectNote([], data.join(", "), "Science", [], "General", idToken);
+      } else {
+          throw new Error("Invalid scan mode or data");
+      }
+
       setResult(scanResult);
-      setCurrentQuestionIdx(0);
-      setCredits(prev => prev - 1);
+      setProgress(90);
       
+      if (setCredits) setCredits(credits - 1);
+
       await addDoc(collection(db, `users/${user.uid}/history`), {
-        topicDetected: scanResult.topicDetected,
-        summary: scanResult.summary,
-        keywords: scanResult.keywords,
+        ...scanResult,
         questions: JSON.stringify(scanResult.questions),
         timestamp: Date.now(),
       });
-      
-      toast.success("Extraction complete!");
-      return "SUCCESS";
+
+      setStatus("success");
+      setProgress(100);
+      toast.success("Discovery Complete");
     } catch (err: any) {
-      toast.error(err.message || "Scan failed.");
-      return "FAILED";
+      setStatus("failed");
+      setProgress(0);
+      toast.error(err.message || "Synthesis failed");
     } finally {
-      setIsScanning(false);
+      setTimeout(() => setStatus("idle"), 3000);
     }
   };
 
-  return { isScanning, result, setResult, currentQuestionIdx, setCurrentQuestionIdx, handleScan };
+  const scanFile = (file: File) => performScan("notes", file);
+  const scanTopics = (topics: string[]) => performScan("topics", topics);
+
+  return { status, progress, scanFile, scanTopics, result };
 }

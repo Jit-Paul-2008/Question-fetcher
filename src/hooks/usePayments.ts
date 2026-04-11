@@ -75,5 +75,5 @@ export function usePayments(user: User | null, setCredits: (c: number | ((p: num
     }
   };
 
-  return { razorpayKeyId, creditPacks, isBuying, handleBuyCredits };
+  return { razorpayKeyId, creditPacks, isBuying, buyCredits: handleBuyCredits };
 }

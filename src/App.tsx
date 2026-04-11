@@ -18,14 +18,14 @@ import { ActiveTab, Theme } from "./lib/types";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("generator");
-  const [theme, setTheme] = useState<Theme>("dark");
+  const [theme, setTheme] = useState<Theme>("light");
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [activeSet, setActiveSet] = useState<any>(null);
 
   // Initialize modular logic
-  const { user, loading: authLoading, error: authError, login, register, googleLogin, logout } = useAuth();
-  const { credits, buyCredits } = usePayments(user);
-  const { status, progress, scanFile, scanTopics, result } = useScanner(user, credits);
+  const { user, loading: authLoading, error: authError, credits, setCredits, login, register, googleLogin, logout } = useAuth();
+  const { buyCredits } = usePayments(user, setCredits);
+  const { status, progress, scanFile, scanTopics, result } = useScanner(user, credits, setCredits);
   const { history, loading: historyLoading, refreshHistory } = useLibrary(user);
   const { activeSession, startSession, leaveSession } = useClassrooms(user);
 
@@ -49,7 +49,7 @@ export default function App() {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center p-12">
         <div className="w-16 h-16 border-4 border-accent/20 border-t-accent rounded-full animate-spin mb-8" />
-        <span className="text-[10px] font-black uppercase tracking-[0.5em] text-accent animate-pulse">Initializing Neural Link</span>
+        <span className="text-[10px] font-bold uppercase tracking-[0.5em] text-primary animate-pulse">Synthesizing Environment</span>
       </div>
     );
   }

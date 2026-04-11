@@ -39,45 +39,45 @@ export function GeneratorWindow({
   const isProcessing = ["uploading", "processing"].includes(status);
 
   return (
-    <div className="max-w-4xl mx-auto space-y-12">
-      <div className="flex flex-col md:flex-row gap-8 items-stretch">
+    <div className="max-w-4xl mx-auto space-y-16">
+      <div className="flex flex-col md:flex-row gap-10 items-stretch">
         {/* Left Control Panel */}
-        <div className="w-full md:w-80 space-y-4">
-          <div className="glass-card p-6 space-y-6">
+        <div className="w-full md:w-80 space-y-6">
+          <div className="bg-card border border-primary/5 p-8 rounded-[2rem] shadow-terra-soft space-y-8">
             <div>
-              <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-royal-bronze mb-4 opacity-40">Intelligence Mode</h3>
-              <div className="space-y-2">
+              <h3 className="text-xs font-bold uppercase tracking-widest text-secondary mb-6 opacity-60">Discovery Mode</h3>
+              <div className="space-y-3">
                 <button
                   onClick={() => setActiveMode("scan")}
-                  className={`w-full flex items-center gap-4 px-4 py-3 rounded-royal-lg transition-all ${
+                  className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all duration-500 ${
                     activeMode === "scan" 
-                    ? "bg-primary text-primary-foreground shadow-md" 
-                    : "hover:bg-accent/5 text-royal-bronze"
+                    ? "bg-primary text-primary-foreground shadow-lg -translate-y-0.5" 
+                    : "hover:bg-primary/5 text-secondary"
                   }`}
                 >
-                  <FileText className="w-4 h-4" />
-                  <span className="text-[10px] font-bold uppercase tracking-widest">Document Scan</span>
+                  <FileText className="w-5 h-5" />
+                  <span className="text-sm font-bold">Document Scan</span>
                 </button>
                 <button
                   onClick={() => setActiveMode("topic")}
-                  className={`w-full flex items-center gap-4 px-4 py-3 rounded-royal-lg transition-all ${
+                  className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all duration-500 ${
                     activeMode === "topic" 
-                    ? "bg-primary text-primary-foreground shadow-md" 
-                    : "hover:bg-accent/5 text-royal-bronze"
+                    ? "bg-primary text-primary-foreground shadow-lg -translate-y-0.5" 
+                    : "hover:bg-primary/5 text-secondary"
                   }`}
                 >
-                  <Plus className="w-4 h-4" />
-                  <span className="text-[10px] font-bold uppercase tracking-widest">Topic Mining</span>
+                  <Plus className="w-5 h-5" />
+                  <span className="text-sm font-bold">Topic Mining</span>
                 </button>
               </div>
             </div>
 
-            <div className="pt-6 border-t border-accent/10">
-              <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-royal-bronze mb-4 opacity-40">Neural Status</h3>
+            <div className="pt-8 border-t border-primary/5">
+              <h3 className="text-xs font-bold uppercase tracking-widest text-secondary mb-4 opacity-60">System Status</h3>
               <div className="flex items-center gap-3">
-                <div className={`w-2 h-2 rounded-full ${isProcessing ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`} />
-                <span className="text-[10px] font-black uppercase tracking-widest text-royal-bronze opacity-80">
-                  {status === 'idle' ? 'Ready for Input' : status.replace('_', ' ')}
+                <div className={`w-2.5 h-2.5 rounded-full ${isProcessing ? 'bg-accent animate-pulse' : 'bg-primary'}`} />
+                <span className="text-sm font-bold text-secondary/80">
+                  {status === 'idle' ? 'Ready for Input' : (status || 'idle').replace('_', ' ')}
                 </span>
               </div>
             </div>
@@ -86,60 +86,60 @@ export function GeneratorWindow({
 
         {/* Main Interaction Area */}
         <div className="flex-1">
-          <div className="glass-card min-h-[400px] flex flex-col p-1">
-            <div className="flex-1 flex flex-col items-center justify-center p-12 relative">
+          <div className="bg-card border border-primary/5 min-h-[480px] flex flex-col rounded-[3rem] shadow-terra-soft p-2">
+            <div className="flex-1 flex flex-col items-center justify-center p-14 relative bg-muted/20 rounded-[2.8rem] border border-white/50">
               {isIdle ? (
                 activeMode === "scan" ? (
                   <label className="w-full cursor-pointer group">
                     <input type="file" className="hidden" accept="image/*,.pdf" onChange={handleFileChange} />
-                    <div className="flex flex-col items-center text-center space-y-8">
-                      <div className="w-24 h-24 rounded-full bg-accent/5 border border-accent/20 flex items-center justify-center group-hover:scale-110 group-hover:bg-accent/10 transition-all duration-500 group-hover:shadow-royal-glow">
-                        <Upload className="w-10 h-10 text-accent" />
+                    <div className="flex flex-col items-center text-center space-y-10">
+                      <div className="w-28 h-28 rounded-[2.5rem] bg-white border border-primary/5 flex items-center justify-center group-hover:scale-105 group-hover:rotate-3 transition-all duration-700 shadow-terra-soft">
+                        <Upload className="w-12 h-12 text-primary" />
                       </div>
-                      <div>
-                        <h4 className="text-2xl font-serif text-foreground mb-4">Ingest Research Material</h4>
-                        <p className="text-sm text-royal-bronze opacity-50 max-w-xs mx-auto leading-relaxed">
-                          Securely upload your handwritten notes or PDF documents for deep analytical processing.
+                      <div className="space-y-4">
+                        <h4 className="text-3xl font-serif font-bold text-primary">Ingest Research</h4>
+                        <p className="text-secondary opacity-70 max-w-xs mx-auto leading-relaxed font-medium">
+                          Upload handwritten notes or PDFs for organic knowledge synthesis.
                         </p>
                       </div>
-                      <div className="px-6 py-2 rounded-full border border-accent/20 text-[10px] font-black uppercase tracking-widest text-royal-bronze group-hover:border-accent/40 transition-colors">
-                        Drop Files or Click
+                      <div className="px-10 py-3.5 rounded-2xl bg-primary text-primary-foreground text-sm font-bold shadow-lg group-hover:opacity-90 transition-all">
+                        Select Research Files
                       </div>
                     </div>
                   </label>
                 ) : (
                   <div className="w-full space-y-12">
                     <div className="text-center space-y-4">
-                        <h4 className="text-2xl font-serif text-foreground">Strategic Topic Mining</h4>
-                        <p className="text-sm text-royal-bronze opacity-50 max-w-xs mx-auto">
-                            Identify specific knowledge domains for intelligence extraction.
+                        <h4 className="text-3xl font-serif font-bold text-primary">Topic Synthesis</h4>
+                        <p className="text-secondary opacity-70 max-w-xs mx-auto font-medium">
+                            Define specific knowledge domains for deep extraction.
                         </p>
                     </div>
 
-                    <div className="max-w-md mx-auto space-y-6">
+                    <div className="max-w-md mx-auto space-y-8">
                         <div className="relative">
                             <input 
                                 type="text"
                                 value={newTopic}
                                 onChange={(e) => setNewTopic(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && handleAddTopic()}
-                                placeholder="Enter knowledge domain..."
-                                className="w-full bg-background/30 border border-accent/20 rounded-royal-xl py-5 px-6 pr-16 text-sm outline-none focus:border-accent/40 transition-all"
+                                placeholder="Enter a subject area..."
+                                className="w-full bg-white border border-primary/5 rounded-3xl py-5 px-8 pr-20 text-sm outline-none focus:border-primary/20 focus:ring-8 focus:ring-primary/5 transition-all shadow-sm"
                             />
                             <button 
                                 onClick={handleAddTopic}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-primary text-primary-foreground rounded-lg flex items-center justify-center hover:scale-110 transition-transform shadow-md"
+                                className="absolute right-3.5 top-1/2 -translate-y-1/2 w-12 h-12 bg-primary text-primary-foreground rounded-2xl flex items-center justify-center hover:scale-110 transition-transform shadow-lg"
                             >
-                                <Plus className="w-6 h-6" />
+                                <Plus className="w-7 h-7" />
                             </button>
                         </div>
 
-                        <div className="flex flex-wrap gap-2 justify-center">
+                        <div className="flex flex-wrap gap-3 justify-center min-h-[44px]">
                             {topics.map((t, i) => (
-                                <div key={i} className="flex items-center gap-2 bg-accent/10 border border-accent/20 px-4 py-2 rounded-full animate-in fade-in slide-in-from-bottom-2">
-                                    <span className="text-[10px] font-bold uppercase tracking-wider text-royal-bronze">{t}</span>
-                                    <button onClick={() => handleRemoveTopic(i)} className="hover:text-red-500 transition-colors">
-                                        <X className="w-3 h-3" />
+                                <div key={i} className="flex items-center gap-3 bg-white border border-primary/5 px-5 py-2.5 rounded-2xl shadow-sm animate-terra-in">
+                                    <span className="text-sm font-bold text-secondary">{t}</span>
+                                    <button onClick={() => handleRemoveTopic(i)} className="text-destructive hover:scale-125 transition-transform">
+                                        <X className="w-4 h-4" />
                                     </button>
                                 </div>
                             ))}
@@ -148,43 +148,43 @@ export function GeneratorWindow({
                         {topics.length > 0 && (
                             <button 
                                 onClick={() => onTopicScan(topics)}
-                                className="w-full bg-primary text-primary-foreground py-4 rounded-royal-xl font-black uppercase tracking-[0.2em] text-[10px] shadow-royal-glow hover:scale-[1.02] transition-all flex items-center justify-center gap-3"
+                                className="w-full bg-primary text-primary-foreground py-5 rounded-3xl font-bold shadow-xl hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-3"
                             >
-                                <Send className="w-4 h-4" />
-                                Initiate Extraction
+                                <Send className="w-5 h-5" />
+                                <span>Begin Synthesis</span>
                             </button>
                         )}
                     </div>
                   </div>
                 )
               ) : (
-                <div className="flex flex-col items-center text-center space-y-12 w-full max-w-sm">
+                <div className="flex flex-col items-center text-center space-y-14 w-full max-w-sm">
                   <div className="relative">
-                    <div className="w-32 h-32 rounded-full border-2 border-accent/10 flex items-center justify-center overflow-hidden">
+                    <div className="w-36 h-36 rounded-[3rem] border-4 border-primary/5 flex items-center justify-center overflow-hidden bg-white shadow-terra-soft">
                         <div 
-                            className="absolute bottom-0 w-full bg-accent/20 transition-all duration-700 ease-out"
+                            className="absolute bottom-0 w-full bg-primary/10 transition-all duration-1000 ease-out"
                             style={{ height: `${progress}%` }}
                         />
-                        <Cpu className={`w-12 h-12 text-accent relative z-10 ${status === 'processing' ? 'animate-pulse' : ''}`} />
+                        <Cpu className={`w-14 h-14 text-primary relative z-10 ${status === 'processing' ? 'animate-pulse' : ''}`} />
                     </div>
                   </div>
                   
-                  <div className="space-y-4">
-                    <h4 className="text-xl font-serif text-foreground uppercase tracking-widest">{status.replace('_', ' ')}...</h4>
-                    <div className="w-full h-1 bg-accent/10 rounded-full overflow-hidden">
+                  <div className="space-y-6 w-full">
+                    <h4 className="text-2xl font-serif font-bold text-primary capitalize">{(status || 'processing').replace('_', ' ')}...</h4>
+                    <div className="w-full h-3 bg-white rounded-full overflow-hidden border border-primary/5 shadow-inner">
                         <div 
-                            className="h-full bg-primary transition-all duration-500" 
+                            className="h-full bg-primary transition-all duration-700 ease-in-out" 
                             style={{ width: `${progress}%` }} 
                         />
                     </div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-royal-bronze opacity-40">
-                        {progress}% Intelligence Synchronized
+                    <p className="text-sm font-bold text-secondary/60">
+                        {progress}% Synthesis Complete
                     </p>
                   </div>
 
-                  <div className="inline-flex items-center gap-3 px-6 py-3 bg-accent/5 border border-accent/10 rounded-royal-lg">
-                    <Loader2 className="w-4 h-4 text-accent animate-spin" />
-                    <span className="text-[10px] font-black uppercase tracking-widest text-accent">Establishing Neural Link</span>
+                  <div className="inline-flex items-center gap-3 px-8 py-4 bg-white border border-primary/5 rounded-3xl shadow-sm">
+                    <Loader2 className="w-5 h-5 text-accent animate-spin" />
+                    <span className="text-sm font-bold text-accent">Aligning Knowledge Paths</span>
                   </div>
                 </div>
               )}
@@ -193,11 +193,13 @@ export function GeneratorWindow({
         </div>
       </div>
 
-      {/* Security Disclaimer */}
-      <div className="flex items-center justify-center gap-8 opacity-40">
-        <div className="h-px w-12 bg-royal-bronze" />
-        <span className="text-[8px] font-black uppercase tracking-[0.5em] text-royal-bronze">End-to-End Encryption Enabled</span>
-        <div className="h-px w-12 bg-royal-bronze" />
+      {/* Trust Quote */}
+      <div className="flex flex-col items-center justify-center gap-4 opacity-50">
+        <div className="h-px w-24 bg-primary/10" />
+        <p className="text-xs font-serif italic text-secondary text-center max-w-xs">
+          "The aim of science is not to open the door to infinite wisdom, but to set a limit to infinite error."
+        </p>
+        <div className="h-px w-24 bg-primary/10" />
       </div>
     </div>
   );

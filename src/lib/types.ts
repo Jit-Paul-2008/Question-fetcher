@@ -13,5 +13,6 @@ export interface CreditPack {
 }
 
 export type ScanMode = "notes" | "topics";
+export type ScanStatus = "idle" | "uploading" | "processing" | "success" | "failed";
 export type ActiveTab = "generator" | "library" | "classrooms" | "map";
 export type Theme = "light" | "dark";

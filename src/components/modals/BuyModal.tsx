@@ -11,83 +11,83 @@ export function BuyModal({
   onSelectPlan
 }: BuyModalProps) {
   const plans = [
-    { credits: 5, price: 99, label: "Basic Access", icon: Zap, color: "text-emerald-500", popular: false },
-    { credits: 25, price: 399, label: "Researcher Pro", icon: Gem, color: "text-amber-500", popular: true },
-    { credits: 100, price: 1499, label: "Sovereign Scholar", icon: Award, color: "text-purple-500", popular: false },
+    { credits: 5, price: 99, label: "Seed Access", icon: Zap, color: "text-primary", popular: false },
+    { credits: 25, price: 399, label: "Cultivator Pro", icon: Gem, color: "text-accent", popular: true },
+    { credits: 100, price: 1499, label: "Harvest Master", icon: Award, color: "text-primary", popular: false },
   ];
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
-      <div className="absolute inset-0 bg-background/80 backdrop-blur-xl transition-opacity animate-in fade-in duration-500" onClick={onClose} />
+      <div className="absolute inset-0 bg-secondary/20 backdrop-blur-md transition-opacity animate-terra-in" onClick={onClose} />
       
-      <div className="glass-card max-w-4xl w-full relative z-10 overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-8 duration-700 shadow-2xl">
-        <div className="absolute top-0 inset-x-0 h-1.5 bg-royal-gradient" />
+      <div className="bg-card max-w-4xl w-full relative z-10 overflow-hidden animate-terra-in rounded-[3.5rem] shadow-2xl border border-primary/5">
+        <div className="absolute top-0 inset-x-0 h-2 bg-gradient-to-r from-primary via-accent to-primary opacity-20" />
         
         <button 
           onClick={onClose}
-          className="absolute top-8 right-8 p-3 rounded-full hover:bg-accent/5 transition-all group"
+          className="absolute top-10 right-10 p-4 rounded-2xl bg-muted hover:bg-primary/5 transition-all group shadow-sm"
         >
-          <X className="w-5 h-5 text-royal-bronze group-hover:rotate-90 transition-transform" />
+          <X className="w-6 h-6 text-secondary group-hover:rotate-90 transition-transform" />
         </button>
 
-        <div className="p-12 md:p-16">
-          <div className="text-center space-y-4 mb-16">
-            <h2 className="text-4xl font-serif text-royal-gradient">Expand Your Intelligence Capacity</h2>
-            <p className="text-[10px] font-black uppercase tracking-[0.4em] text-royal-bronze opacity-60">
-              Acquire premium units to power your research pipeline
+        <div className="p-16 md:p-24">
+          <div className="text-center space-y-6 mb-20">
+            <h2 className="text-5xl font-serif font-bold text-primary">Expand Your Potential</h2>
+            <p className="text-sm font-bold text-secondary/40 uppercase tracking-[0.3em]">
+              Acquire intelligence units to fuel your cognitive journey
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
             {plans.map((plan) => (
               <div 
                 key={plan.label}
-                className={`glass-card p-10 flex flex-col items-center text-center relative group hover:scale-[1.05] transition-all duration-500 ${plan.popular ? 'border-accent shadow-royal-glow ring-2 ring-accent/20' : 'border-accent/10'}`}
+                className={`bg-card p-12 flex flex-col items-center text-center relative group hover:shadow-2xl transition-all duration-700 rounded-[3rem] border border-primary/5 ${plan.popular ? 'ring-4 ring-accent/10 shadow-xl' : 'shadow-terra-soft'}`}
               >
                 {plan.popular && (
-                    <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-6 py-1.5 bg-accent text-white text-[8px] font-black uppercase tracking-widest rounded-full shadow-lg">
-                        Recommended
+                    <div className="absolute -top-5 left-1/2 -translate-x-1/2 px-8 py-2 bg-accent text-white text-[10px] font-bold uppercase tracking-widest rounded-xl shadow-lg">
+                        Recommended Choice
                     </div>
                 )}
 
-                <div className={`p-5 rounded-royal-2xl bg-card border border-accent/10 mb-8 ${plan.color}`}>
-                  <plan.icon className="w-8 h-8" />
+                <div className={`p-6 rounded-[2rem] bg-muted mb-10 ${plan.color} transform group-hover:scale-110 transition-transform duration-500`}>
+                  <plan.icon className="w-10 h-10" />
                 </div>
 
-                <div className="space-y-2 mb-8">
-                    <h3 className="text-lg font-serif">{plan.label}</h3>
-                    <div className="flex items-center justify-center gap-2">
-                        <span className="text-3xl font-serif text-foreground">₹{plan.price}</span>
+                <div className="space-y-3 mb-10">
+                    <h3 className="text-xl font-serif font-bold text-primary">{plan.label}</h3>
+                    <div className="flex items-center justify-center gap-1">
+                        <span className="text-4xl font-serif font-bold text-secondary">₹{plan.price}</span>
                     </div>
                 </div>
 
-                <div className="text-[10px] font-black text-accent uppercase tracking-widest mb-10">
-                    +{plan.credits} Intelligence Units
+                <div className="text-xs font-bold text-accent uppercase tracking-widest mb-12">
+                    +{plan.credits} Intelligent Units
                 </div>
 
                 <button 
                     onClick={() => onSelectPlan(plan.credits, plan.price)}
-                    className={`w-full py-4 rounded-royal-xl font-black uppercase tracking-widest text-[9px] transition-all flex items-center justify-center gap-2 ${
+                    className={`w-full py-5 rounded-2xl font-bold uppercase tracking-widest text-[10px] transition-all flex items-center justify-center gap-3 ${
                         plan.popular 
-                        ? 'bg-primary text-primary-foreground shadow-lg' 
-                        : 'bg-accent/5 border border-accent/20 text-accent hover:bg-accent/10'
+                        ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90' 
+                        : 'bg-muted text-primary hover:bg-primary/5'
                     }`}
                 >
-                    Acquire Now
-                    <ChevronRight className="w-3 h-3" />
+                    Acquire Units
+                    <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
             ))}
           </div>
 
-          <div className="mt-16 pt-12 border-t border-accent/10 flex flex-col md:flex-row items-center justify-between gap-8 opacity-40">
-            <div className="flex items-center gap-3">
-                <Shield className="w-5 h-5 text-emerald-500" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-royal-bronze">End-to-End Encrypted Transaction</span>
+          <div className="mt-20 pt-16 border-t border-primary/5 flex flex-col md:flex-row items-center justify-between gap-10">
+            <div className="flex items-center gap-4">
+                <Shield className="w-6 h-6 text-primary/40" />
+                <span className="text-xs font-bold text-secondary/40 uppercase tracking-widest italic">Organic Secure Protocol</span>
             </div>
-            <div className="flex items-center gap-8">
-                <span className="text-[8px] font-black text-royal-bronze uppercase tracking-widest">Razorpay Powered</span>
-                <span className="text-[8px] font-black text-royal-bronze uppercase tracking-widest">Instant Credit Sync</span>
+            <div className="flex items-center gap-12">
+                <span className="text-[10px] font-bold text-secondary/30 uppercase tracking-[0.2em]">Tier-1 Processing</span>
+                <span className="text-[10px] font-bold text-secondary/30 uppercase tracking-[0.2em]">Verified Synthesis</span>
             </div>
           </div>
         </div>
