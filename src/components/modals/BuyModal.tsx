@@ -20,7 +20,7 @@ export function BuyModal({
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
       <div className="absolute inset-0 bg-secondary/20 backdrop-blur-md transition-opacity animate-terra-in" onClick={onClose} />
       
-      <div className="bg-card max-w-4xl w-full relative z-10 overflow-hidden animate-terra-in rounded-[3.5rem] shadow-2xl border border-primary/5">
+      <div className="bg-card max-w-4xl w-full relative z-10 overflow-hidden animate-terra-in rounded-[3.5rem] shadow-2xl">
         <div className="absolute top-0 inset-x-0 h-2 bg-gradient-to-r from-primary via-accent to-primary opacity-20" />
         
         <button 
@@ -40,9 +40,7 @@ export function BuyModal({
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
             {plans.map((plan) => (
-              <div 
-                key={plan.label}
-                className={`bg-card p-12 flex flex-col items-center text-center relative group hover:shadow-2xl transition-all duration-700 rounded-[3rem] border border-primary/5 ${plan.popular ? 'ring-4 ring-accent/10 shadow-xl' : 'shadow-terra-soft'}`}
+                className={`bg-card p-12 flex flex-col items-center text-center relative group hover:shadow-2xl transition-all duration-700 rounded-[3rem] ${plan.popular ? 'bg-muted/30 shadow-xl' : 'shadow-terra-soft'}`}
               >
                 {plan.popular && (
                     <div className="absolute -top-5 left-1/2 -translate-x-1/2 px-8 py-2 bg-accent text-white text-[10px] font-bold uppercase tracking-widest rounded-xl shadow-lg">
@@ -80,7 +78,7 @@ export function BuyModal({
             ))}
           </div>
 
-          <div className="mt-20 pt-16 border-t border-primary/5 flex flex-col md:flex-row items-center justify-between gap-10">
+          <div className="mt-20 pt-16 flex flex-col md:flex-row items-center justify-between gap-10">
             <div className="flex items-center gap-4">
                 <Shield className="w-6 h-6 text-primary/40" />
                 <span className="text-xs font-bold text-secondary/40 uppercase tracking-widest italic">Organic Secure Protocol</span>

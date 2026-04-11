@@ -112,10 +112,11 @@ export function getDomainsForContext(context: SearchContext): string[] {
   const domains = new Set<string>();
 
   const subjectLower = subject.toLowerCase();
-  const isScience = ["physics", "chemistry", "biology", "mathematics", "computer science", "environmental science", "maths"].some(s => subjectLower.includes(s));
-  const isCommerce = ["business", "accountancy", "economics"].some(s => subjectLower.includes(s));
-  const isHumanities = ["history", "geography", "political", "sociology", "psychology", "philosophy"].some(s => subjectLower.includes(s));
-  const isLanguage = ["english", "hindi", "sanskrit", "bengali"].some(s => subjectLower.includes(s));
+  const isScience = ["physics", "chemistry", "biology", "mathematics", "computer science", "environmental science", "maths", "psychology", "physical education"].some(s => subjectLower.includes(s));
+  const isCommerce = ["business", "accountancy", "economics", "entrepreneurship", "legal studies"].some(s => subjectLower.includes(s));
+  const isHumanities = ["history", "geography", "political", "sociology", "psychology", "philosophy", "home science", "fine arts"].some(s => subjectLower.includes(s));
+  const isLanguage = ["english", "hindi", "sanskrit", "bengali", "french", "german", "spanish"].some(s => subjectLower.includes(s));
+
 
   // 1. Board-Specific Logic (Top Priority)
   if (exams.some(e => e.includes("wbsche"))) {

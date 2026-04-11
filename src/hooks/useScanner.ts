@@ -11,7 +11,13 @@ export function useScanner(user: User | null, credits: number, setCredits?: (c: 
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<ScanResult | null>(null);
 
-  const performScan = async (mode: "notes" | "topics", data: string[] | File) => {
+  const performScan = async (
+    mode: "notes" | "topics", 
+    data: string[] | File,
+    subject: string = "Science",
+    exams: string[] = [],
+    targetClass: string = "General"
+  ) => {
     if (!user) return;
     if (credits <= 0) {
       toast.error("Low discovery units. Please top up.");
@@ -36,11 +42,11 @@ export function useScanner(user: User | null, credits: number, setCredits?: (c: 
           
           setStatus("processing");
           setProgress(60);
-          scanResult = await scanSubjectNote([base64], "", "Science", [], "General", idToken);
+          scanResult = await scanSubjectNote([base64], "", subject, exams, targetClass, idToken);
       } else if (mode === "topics" && Array.isArray(data)) {
           setStatus("processing");
           setProgress(60);
-          scanResult = await scanSubjectNote([], data.join(", "), "Science", [], "General", idToken);
+          scanResult = await scanSubjectNote([], data.join(", "), subject, exams, targetClass, idToken);
       } else {
           throw new Error("Invalid scan mode or data");
       }
@@ -52,6 +58,9 @@ export function useScanner(user: User | null, credits: number, setCredits?: (c: 
 
       await addDoc(collection(db, `users/${user.uid}/history`), {
         ...scanResult,
+        subject,
+        exams,
+        targetClass,
         questions: JSON.stringify(scanResult.questions),
         timestamp: Date.now(),
       });
@@ -68,8 +77,11 @@ export function useScanner(user: User | null, credits: number, setCredits?: (c: 
     }
   };
 
-  const scanFile = (file: File) => performScan("notes", file);
-  const scanTopics = (topics: string[]) => performScan("topics", topics);
+  const scanFile = (file: File, subject?: string, exams?: string[], targetClass?: string) => 
+    performScan("notes", file, subject, exams, targetClass);
+    
+  const scanTopics = (topics: string[], subject?: string, exams?: string[], targetClass?: string) => 
+    performScan("topics", topics, subject, exams, targetClass);
 
   return { status, progress, scanFile, scanTopics, result };
 }

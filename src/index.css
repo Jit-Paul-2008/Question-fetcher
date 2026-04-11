@@ -51,15 +51,12 @@
 }
 
 @layer base {
-  * {
-    @apply border-border;
-  }
   body {
     @apply bg-background text-foreground antialiased;
     font-family: 'Nunito Sans', sans-serif;
     background-image: 
-      radial-gradient(at 0% 0%, rgba(196, 166, 106, 0.03) 0px, transparent 50%),
-      radial-gradient(at 100% 100%, rgba(74, 124, 89, 0.03) 0px, transparent 50%);
+      radial-gradient(at 0% 0%, rgba(196, 166, 106, 0.05) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, rgba(74, 124, 89, 0.05) 0px, transparent 50%);
     background-attachment: fixed;
   }
   h1, h2, h3, h4, h5, h6 {
@@ -70,19 +67,22 @@
 
 @layer utilities {
   .terra-glass {
-    @apply bg-card/70 backdrop-blur-xl border border-accent/10 shadow-[0_4px_20px_rgba(46,50,48,0.04)];
+    @apply bg-card/60 backdrop-blur-xl shadow-[0_4px_30px_rgba(0,0,0,0.03)];
   }
   .terra-button-primary {
-    @apply bg-primary text-primary-foreground px-8 py-3 rounded-royal-xl font-bold hover:opacity-90 transition-all shadow-sm;
+    @apply bg-primary text-primary-foreground px-8 py-3 rounded-2xl font-bold hover:opacity-90 transition-all shadow-lg shadow-primary/10;
   }
   .terra-button-secondary {
-    @apply bg-secondary/10 text-secondary px-8 py-3 rounded-royal-xl font-bold hover:bg-secondary/20 transition-all;
+    @apply bg-secondary/5 text-secondary px-8 py-3 rounded-2xl font-bold hover:bg-secondary/10 transition-all;
   }
   .terra-card {
-    @apply bg-card border border-accent/5 p-8 rounded-royal-xl shadow-[0_8px_30px_rgba(0,0,0,0.02)];
+    @apply bg-card p-10 rounded-[3rem] shadow-[0_20px_50px_rgba(0,0,0,0.02)];
+  }
+  .terra-card-tonal {
+    @apply bg-muted/30 p-8 rounded-[2.5rem] transition-all;
   }
   .text-terra-gradient {
-    @apply bg-clip-text text-transparent bg-gradient-to-br from-primary to-accent;
+    @apply bg-clip-text text-transparent bg-gradient-to-br from-primary to-accent font-black;
   }
 }
 

@@ -4,6 +4,7 @@ import { AuthWindow } from "./components/windows/AuthWindow";
 import { GeneratorWindow } from "./components/windows/GeneratorWindow";
 import { LibraryWindow } from "./components/windows/LibraryWindow";
 import { ClassroomWindow } from "./components/windows/ClassroomWindow";
+import { KnowledgeMapWindow } from "./components/windows/KnowledgeMapWindow";
 import { BuyModal } from "./components/modals/BuyModal";
 
 // Redesigned Hooks
@@ -12,6 +13,10 @@ import { useScanner } from "./hooks/useScanner";
 import { useLibrary } from "./hooks/useLibrary";
 import { useClassrooms } from "./hooks/useClassrooms";
 import { usePayments } from "./hooks/usePayments";
+
+// Export Utilities
+import { generateQuestionsPDF } from "./lib/pdf";
+import { generateQuestionsDocx } from "./lib/docx";
 
 // Types
 import { ActiveTab, Theme } from "./lib/types";
@@ -44,6 +49,24 @@ export default function App() {
   }, [result]);
 
   const toggleTheme = () => setTheme(prev => prev === "light" ? "dark" : "light");
+
+  const handleExport = async (type: 'pdf' | 'docx') => {
+    if (!activeSet) return;
+    
+    const topic = activeSet.title || activeSet.topic || "Research Synthesis";
+    const questions = activeSet.questions || [];
+    const subject = activeSet.subject || "Chemistry"; // Fallback to Chemistry for ChemScan
+
+    try {
+      if (type === 'pdf') {
+        await generateQuestionsPDF(topic, questions, subject);
+      } else {
+        await generateQuestionsDocx(topic, questions, subject);
+      }
+    } catch (error) {
+      console.error("Export failed:", error);
+    }
+  };
 
   if (authLoading) {
     return (
@@ -86,17 +109,24 @@ export default function App() {
               setActiveSet(set);
               setActiveTab("classrooms");
             }}
+            onExport={(set, type) => {
+              // Store as active then export
+              setActiveSet(set);
+              handleExport(type); 
+            }}
           />
         );
       case "classrooms":
         return (
           <ClassroomWindow 
             activeSet={activeSet}
-            onExport={(type) => console.log("Exporting", type)} // Integration pending in walkthrough
+            onExport={handleExport}
             onShare={() => console.log("Sharing")}
             onClose={() => setActiveTab("generator")}
           />
         );
+      case "map":
+        return <KnowledgeMapWindow activeSet={activeSet} />;
       default:
         return (
           <div className="p-24 text-center opacity-20 text-[10px] font-black uppercase tracking-[0.5em]">

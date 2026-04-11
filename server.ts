@@ -500,7 +500,7 @@ async function startServer() {
       }
       console.log(`[Cache:MISS] key=${cacheKey} topic="${topic}"`);
 
-      const geminiKey = process.env.GEMINI_API_KEY || process.env.chem1;
+      const geminiKey = process.env.GEMINI_API_KEY;
       const tavilyKey = process.env.TAVILY_API_KEY;
       if (!geminiKey || !tavilyKey) {
         console.error("Missing API Keys: GEMINI_API_KEY or TAVILY_API_KEY not found in environment.");
@@ -771,6 +771,26 @@ async function startServer() {
           timestamp: admin.firestore.FieldValue.serverTimestamp()
         }).catch(err => console.error("[Cache:SaveError:Firestore]", err));
 
+        // Save keywords to discovery collection for the Knowledge Map
+        const keywords = analysis.keywords || [];
+        keywords.forEach((kw: string) => {
+          const kwId = kw.toLowerCase().replace(/\s+/g, "_");
+          db.collection("discovery").doc(kwId).set({
+            name: kw,
+            type: "keyword",
+            subject: subjectLabel,
+            lastSeen: admin.firestore.FieldValue.serverTimestamp()
+          }, { merge: true }).catch(() => { });
+
+          // Link keyword to this topic
+          db.collection("discovery").doc(`${kwId}_${cacheKey}`).set({
+            source: kwId,
+            target: cacheKey,
+            type: "link",
+            timestamp: admin.firestore.FieldValue.serverTimestamp()
+          }).catch(() => { });
+        });
+
         // Save to Pinecone
         (async () => {
           const vector = await getTopicEmbedding(analysis.topicDetected || topic);
@@ -804,36 +824,84 @@ async function startServer() {
   // ─── Knowledge Map API ────────────────────────────────────────────────────────
   app.get("/api/graph-data", async (req, res) => {
     try {
-      // Fetch from both global_cache and community_library
-      const [cacheSnap, librarySnap] = await Promise.all([
-        db.collection("global_cache").limit(50).get(),
-        db.collection("community_library").limit(50).get()
-      ]);
+      // 1. Fetch latest 100 discoveries from global_cache (the true "Search Graph")
+      const cacheSnap = await db.collection("global_cache")
+        .orderBy("timestamp", "desc")
+        .limit(100)
+        .get();
 
-      const nodes = [
-        ...cacheSnap.docs.map(doc => ({
-          id: doc.id,
-          topic: doc.data().topicDetected || "Topic",
-          subject: doc.data().subject || "Chemistry",
-        })),
-        ...librarySnap.docs.map(doc => ({
-          id: doc.id,
-          topic: doc.data().topicDetected || "Research",
-          subject: doc.data().subject || "Biology",
-        }))
-      ];
-
-      // Temporary simple links (semantic clustering will happen via Pinecone later)
+      const nodeMap = new Map();
       const links: any[] = [];
-      
-      // Semantic Linker: Connect nodes sharing same subject or similar keywords
+      const nodes: any[] = [];
+
+      cacheSnap.docs.forEach(doc => {
+        const data = doc.data();
+        const id = doc.id;
+        const topic = data.topicDetected || data.topic || "Discovery";
+        const subject = data.subject || "General";
+        const keywords = Array.isArray(data.keywords) ? data.keywords : [];
+
+        if (!nodeMap.has(id)) {
+          const mainNode = {
+            id,
+            name: topic,
+            group: subject,
+            value: 8, // Larger for main topics
+            keywords: keywords,
+            type: "topic"
+          };
+          nodeMap.set(id, mainNode);
+          nodes.push(mainNode);
+        }
+      });
+
+      // 2. Add keywords from discovery collection for granular nodes
+      const discoverySnap = await db.collection("discovery")
+        .where("type", "==", "keyword")
+        .limit(200)
+        .get();
+
+      discoverySnap.docs.forEach(doc => {
+        const data = doc.data();
+        const id = doc.id;
+        if (!nodeMap.has(id)) {
+          const kwNode = {
+            id,
+            name: data.name,
+            group: data.subject || "General",
+            value: 2, // Smaller for keywords
+            type: "keyword"
+          };
+          nodeMap.set(id, kwNode);
+          nodes.push(kwNode);
+        }
+      });
+
+      // 3. Add links from discovery collection
+      const linksSnap = await db.collection("discovery")
+        .where("type", "==", "link")
+        .limit(300)
+        .get();
+
+      linksSnap.docs.forEach(doc => {
+        const data = doc.data();
+        if (nodeMap.has(data.source) && nodeMap.has(data.target)) {
+          links.push({
+            source: data.source,
+            target: data.target,
+            value: 1,
+            type: "discovery-link"
+          });
+        }
+      });
+
+      // 4. Fallback cross-link nodes based on shared subject
       for (let i = 0; i < nodes.length; i++) {
         for (let j = i + 1; j < nodes.length; j++) {
           const n1 = nodes[i];
           const n2 = nodes[j];
-          
-          if (n1.subject === n2.subject) {
-            links.push({ source: n1.id, target: n2.id, value: 1 });
+          if (n1.type === "topic" && n2.type === "topic" && n1.group === n2.group) {
+            links.push({ source: n1.id, target: n2.id, value: 0.5, type: "subject-link" });
           }
         }
       }
@@ -844,6 +912,7 @@ async function startServer() {
       res.status(500).json({ error: "Failed to fetch map data" });
     }
   });
+
 
   // ─── Admin Migration Endpoint (One-time use) ──────────────────────────────────
   app.post("/api/admin/backfill", async (req, res) => {

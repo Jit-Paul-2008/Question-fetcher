@@ -68,5 +68,5 @@ export async function generateQuestionsPDF(topic: string, questions: Question[],
     y += 15;
   });
 
-  doc.save(`${subject}_Questions_${topic.replace(/\s+/g, "_")}.pdf`);
+  doc.save(`${subject}_Questions_${String(topic || 'Report').replace(/\s+/g, "_")}.pdf`);
 }

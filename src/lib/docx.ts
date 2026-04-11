@@ -110,5 +110,5 @@ export async function generateQuestionsDocx(topic: string, questions: Question[]
   });
 
   const blob = await Packer.toBlob(doc);
-  saveAs(blob, `${subject}_${topic.replace(/\s+/g, "_")}_Question_Bank.docx`);
+  saveAs(blob, `${subject}_${String(topic || 'Report').replace(/\s+/g, "_")}_Question_Bank.docx`);
 }

@@ -22,11 +22,12 @@ export const EXAMS = [
 export const CLASSES = ["6", "7", "8", "9", "10", "11", "12", "Graduation"];
 
 export const SUBJECTS = [
-  { group: "Science", items: ["Physics", "Chemistry", "Biology", "Mathematics", "Computer Science", "Environmental Science"] },
-  { group: "Commerce", items: ["Business Studies", "Accountancy", "Economics"] },
-  { group: "Humanities", items: ["History", "Geography", "Political Science", "Sociology", "Psychology", "Philosophy"] },
-  { group: "Languages", items: ["English", "Hindi", "Sanskrit", "Bengali"] },
+  { group: "Science", items: ["Physics", "Chemistry", "Biology", "Mathematics", "Computer Science", "Environmental Science", "Psychology", "Physical Education"] },
+  { group: "Commerce", items: ["Business Studies", "Accountancy", "Economics", "Entrepreneurship", "Legal Studies"] },
+  { group: "Humanities", items: ["History", "Geography", "Political Science", "Sociology", "Home Science", "Philosophy", "Fine Arts"] },
+  { group: "Languages", items: ["English", "Hindi", "Sanskrit", "Bengali", "French", "German", "Spanish"] },
 ];
+
 
 export const MAX_IMAGES = 8;
 export const MAX_TOPICS = 5;
