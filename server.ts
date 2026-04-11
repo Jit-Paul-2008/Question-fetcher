@@ -46,8 +46,8 @@ const embedModel = genAIEmbed.getGenerativeModel({ model: "text-embedding-004" }
 
 async function getTopicEmbedding(text: string) {
   try {
-    const result = await embedModel.embedContent(text);
-    return result.embedding.values;
+    const result = await withRetry(() => embedModel.embedContent(text)).catch(() => null);
+    return result ? result.embedding.values : null;
   } catch (err) {
     console.error("[Embedding:Error]", err);
     return null;
@@ -562,7 +562,7 @@ async function startServer() {
 
           const response = await withRetry(() =>
             ai.models.generateContent({
-              model: "gemini-3.1-flash-lite-preview",
+              model: "gemini-2.0-flash-lite-preview",
               contents: { parts: [{ text: topicPrompt }] },
               config: {
                 responseMimeType: "application/json",
@@ -600,7 +600,7 @@ async function startServer() {
 
           const analysisResponse = await withRetry(() =>
             ai.models.generateContent({
-              model: "gemini-3.1-flash-lite-preview",
+              model: "gemini-2.0-flash-lite-preview",
               contents: { parts: [...contentParts, { text: analysisPrompt }] },
               config: {
                 responseMimeType: "application/json",
