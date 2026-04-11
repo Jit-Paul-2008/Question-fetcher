@@ -53,7 +53,7 @@ const EXAMS = [
   { id: "wbsche-12", name: "WBSCHE 12" }
 ];
 
-const CLASSES = ["9", "10", "11", "12", "Graduation"];
+const CLASSES = ["6", "7", "8", "9", "10", "11", "12", "Graduation"];
 
 const SUBJECTS = [
   { group: "Science", items: ["Physics", "Chemistry", "Biology", "Mathematics", "Computer Science", "Environmental Science"] },
@@ -359,9 +359,113 @@ export default function App() {
 
         <AnimatePresence mode="wait">
           {activeTab === "generator" && (
-            <motion.div key="gen" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.4 }}>
+            <motion.div key="gen" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.4 }} className="space-y-10">
+              {/* ─── Selection Command Center ─── */}
+              <Card className="border-none shadow-claude-ring glass rounded-claude-3xl overflow-hidden p-8 relative">
+                <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
+                  <Sparkles className="w-20 h-20 text-claude-terracotta" />
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 relative z-10">
+                  {/* Category: Class */}
+                  <div className="space-y-5">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="w-8 h-8 rounded-full bg-claude-terracotta/10 flex items-center justify-center">
+                        <GraduationCap className="w-4 h-4 text-claude-terracotta" />
+                      </div>
+                      <Label className="uppercase text-[11px] font-black tracking-[0.25em] text-claude-near-black">Class Selection</Label>
+                    </div>
+                    <div className="flex flex-wrap gap-2.5">
+                      {CLASSES.map(c => (
+                        <button
+                          key={c}
+                          onClick={() => setTargetClass(c)}
+                          className={`px-5 py-2.5 rounded-claude-xl text-[11px] font-bold border transition-all duration-300 ${targetClass === c ? "bg-claude-terracotta border-claude-terracotta text-white shadow-lg -translate-y-0.5" : "bg-white/50 border-claude-border-cream text-claude-stone-gray hover:border-claude-terracotta/50 hover:bg-white"}`}
+                        >
+                          {c}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Category: Subject */}
+                  <div className="space-y-5">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="w-8 h-8 rounded-full bg-claude-terracotta/10 flex items-center justify-center">
+                        <FlaskConical className="w-4 h-4 text-claude-terracotta" />
+                      </div>
+                      <Label className="uppercase text-[11px] font-black tracking-[0.25em] text-claude-near-black">Academic Domain</Label>
+                    </div>
+                    <div className="max-h-[160px] overflow-y-auto pr-3 custom-scrollbar space-y-6">
+                      {SUBJECTS.map(group => (
+                        <div key={group.group} className="space-y-3">
+                          <p className="text-[9px] uppercase font-black text-claude-stone-gray/40 px-1 tracking-widest">{group.group}</p>
+                          <div className="flex flex-wrap gap-2">
+                            {group.items.map(s => (
+                              <button
+                                key={s}
+                                onClick={() => setSubject(s)}
+                                className={`px-3.5 py-1.5 rounded-full text-[10px] font-bold border transition-all duration-300 ${subject === s ? "bg-claude-near-black border-claude-near-black text-white shadow-md" : "bg-white/40 border-claude-border-cream text-claude-stone-gray hover:bg-claude-parchment hover:border-claude-stone-gray/20"}`}
+                              >
+                                {s}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Category: Exams */}
+                  <div className="space-y-5">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="w-8 h-8 rounded-full bg-claude-terracotta/10 flex items-center justify-center">
+                        <Layers className="w-4 h-4 text-claude-terracotta" />
+                      </div>
+                      <Label className="uppercase text-[11px] font-black tracking-[0.25em] text-claude-near-black">Exam Targets <span className="opacity-30 italic font-medium lowercase tracking-normal text-[9px] ml-1">(Optional)</span></Label>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      {EXAMS.map(e => (
+                        <button
+                          key={e.id}
+                          onClick={() => {
+                            setSelectedExams(prev => 
+                              prev.includes(e.name) ? prev.filter(x => x !== e.name) : [...prev, e.name]
+                            )
+                          }}
+                          className={`flex items-center justify-center px-3 py-2.5 rounded-claude-lg text-[10px] font-bold border transition-all duration-300 ${selectedExams.includes(e.name) ? "bg-claude-terracotta/10 border-claude-terracotta text-claude-terracotta shadow-sm" : "bg-white/40 border-claude-border-cream text-claude-olive-gray hover:border-claude-terracotta/30"}`}
+                        >
+                          {selectedExams.includes(e.name) && <CheckCircle2 className="w-3 h-3 mr-2" />}
+                          {e.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sub-Selection Status Bar */}
+                <div className="mt-8 pt-6 border-t border-claude-border-cream/50 flex items-center justify-between">
+                  <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-claude-terracotta animate-pulse" />
+                      <span className="text-[10px] font-black uppercase tracking-widest text-claude-near-black">Active Context:</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Badge variant="outline" className="bg-claude-parchment border-none text-[9px] font-bold px-3 py-1">CLASS {targetClass}</Badge>
+                      <Badge variant="outline" className="bg-claude-parchment border-none text-[9px] font-bold px-3 py-1">{subject.toUpperCase()}</Badge>
+                      {selectedExams.length > 0 && (
+                        <Badge variant="outline" className="bg-claude-terracotta/5 border-none text-claude-terracotta text-[9px] font-bold px-3 py-1">{selectedExams.length} EXAM TARGETS</Badge>
+                      )}
+                    </div>
+                  </div>
+                  <Button variant="ghost" size="sm" className="text-[9px] font-bold text-claude-stone-gray hover:text-claude-terracotta" onClick={() => { setTargetClass("12"); setSubject("Chemistry"); setSelectedExams([]); }}>
+                    RESET ALL
+                  </Button>
+                </div>
+              </Card>
+
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-                <div className="lg:col-span-5 space-y-8">
+                <div className="lg:col-span-4 space-y-8">
                   <Card className="border-none shadow-claude-ring bg-claude-ivory rounded-claude-3xl overflow-hidden">
                     <CardHeader className="p-8 pb-4">
                       <div className="flex bg-claude-parchment p-1 rounded-claude-xl mb-6">
@@ -379,48 +483,11 @@ export default function App() {
                           {images.length > 0 && <p className="mt-4 text-[10px] text-claude-terracotta font-bold">{images.length}/{MAX_IMAGES} Assets Prepared</p>}
                         </div>
                       ) : (
-                        <div className="space-y-2">
+                        <div className="space-y-4">
                           <Label className="uppercase text-[10px] font-bold tracking-[0.2em] text-claude-stone-gray ml-1">Target Subjects</Label>
                           <Input placeholder="e.g. Thermodynamics, Equilibrium..." value={topic} onChange={e => setTopic(e.target.value)} className="h-14 rounded-claude-xl border-claude-border-cream" />
                         </div>
                       )}
-                      <div className="space-y-2">
-                        <Label className="uppercase text-[10px] font-bold tracking-[0.2em] text-claude-stone-gray ml-1">Knowledge Vertical</Label>
-                        <select value={subject} onChange={e => setSubject(e.target.value)} className="w-full h-14 bg-white rounded-claude-xl border border-claude-border-cream px-4 font-serif">
-                          {SUBJECTS.flatMap(g => g.items).map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                      </div>
-
-                      <div className="space-y-4 pt-2">
-                        <div className="flex justify-between items-center mb-1">
-                          <Label className="uppercase text-[10px] font-bold tracking-[0.2em] text-claude-stone-gray ml-1">Target Context</Label>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1.5">
-                            <span className="text-[9px] uppercase font-bold text-claude-stone-gray/60 px-1">Class Level</span>
-                            <select value={targetClass} onChange={e => setTargetClass(e.target.value)} className="w-full h-12 bg-white rounded-claude-xl border border-claude-border-cream px-3 text-sm">
-                              {CLASSES.map(c => <option key={c} value={c}>Class {c}</option>)}
-                            </select>
-                          </div>
-                          <div className="space-y-1.5">
-                            <span className="text-[9px] uppercase font-bold text-claude-stone-gray/60 px-1">Target Exams</span>
-                            <div className="h-12 flex items-center gap-1.5 overflow-x-auto no-scrollbar scroll-smooth">
-                              {EXAMS.map(ex => {
-                                const isSelected = selectedExams.includes(ex.id);
-                                return (
-                                  <button
-                                    key={ex.id}
-                                    onClick={() => setSelectedExams(prev => isSelected ? prev.filter(id => id !== ex.id) : [...prev, ex.id])}
-                                    className={`flex-shrink-0 px-3 h-8 rounded-full text-[9px] font-bold border transition-all ${isSelected ? "bg-claude-terracotta border-claude-terracotta text-white shadow-sm" : "border-claude-border-cream text-claude-stone-gray hover:border-claude-terracotta"}`}
-                                  >
-                                    {ex.name}
-                                  </button>
-                                )
-                              })}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
 
                       <Button onClick={handleScan} disabled={isScanning} className="w-full h-16 bg-claude-terracotta hover:bg-claude-terracotta/90 text-white font-bold rounded-claude-2xl mt-4 shadow-lg text-sm uppercase tracking-widest">
                         {isScanning ? <Loader2 className="animate-spin" /> : <Sparkles className="w-5 h-5 mr-3" />}
@@ -430,7 +497,7 @@ export default function App() {
                   </Card>
                 </div>
 
-                <div className="lg:col-span-7">
+                <div className="lg:col-span-8">
                   {result ? (
                     <Card className="border-none shadow-claude-whisper bg-white rounded-claude-3xl overflow-hidden">
                       <CardHeader className="p-10 border-b border-claude-border-cream relative">
@@ -551,7 +618,7 @@ export default function App() {
           )}
 
           {activeTab === "library" && (
-            <motion.div key="lib" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <motion.div key="lib" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.4 }} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {libraryBanks.map((b, i) => (
                 <Card key={i} className="bg-white border-none shadow-claude-ring rounded-claude-2xl p-8 hover:-translate-y-1 transition-all cursor-pointer" onClick={() => { setResult(b); setActiveTab("generator"); }}>
                   <div className="flex justify-between items-start mb-6">
@@ -567,11 +634,11 @@ export default function App() {
           )}
 
           {activeTab === "classrooms" && (
-            <motion.div key="crooms" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="max-w-4xl mx-auto space-y-16">
+            <motion.div key="crooms" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.4 }} className="max-w-4xl mx-auto space-y-16">
               <Card className="bg-claude-terracotta text-white border-none rounded-claude-3xl p-12 text-center relative overflow-hidden shadow-2xl">
                 <div className="relative z-10">
                   <h2 className="text-4xl font-serif mb-4">Academic Collab Hub</h2>
-                  <p className="opacity-80 mb-10 font-serif italic italic max-w-sm mx-auto">Enter the session join code to sync shared strategic assessments.</p>
+                  <p className="opacity-80 mb-10 font-serif italic max-w-sm mx-auto">Enter the session join code to sync shared strategic assessments.</p>
                   <div className="flex gap-3 max-w-md mx-auto">
                     <Input placeholder="SCAN-CODE" value={classroomCode} onChange={e => setClassroomCode(e.target.value.toUpperCase())} className="h-16 text-center text-3xl font-mono font-bold bg-white/20 border-white/30 text-white placeholder:text-white/40 rounded-claude-2xl" />
                     <Button onClick={joinClassroom} disabled={isJoining} className="h-16 px-10 bg-white text-claude-terracotta font-bold rounded-claude-2xl shadow-lg">JOIN</Button>
@@ -625,10 +692,10 @@ export default function App() {
           )}
 
           {activeTab === "map" && (
-            <motion.div key="map" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-[750px] bg-white/40 backdrop-blur-md rounded-claude-3xl border border-claude-border-cream relative overflow-hidden shadow-2xl">
+            <motion.div key="map" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }} className="h-[750px] bg-white/40 backdrop-blur-md rounded-claude-3xl border border-claude-border-cream relative overflow-hidden shadow-2xl">
               <div className="absolute top-10 left-10 p-8 bg-white/80 backdrop-blur-xl border border-claude-border-cream rounded-claude-3xl max-w-sm z-10 shadow-xl">
                 <h2 className="text-3xl font-serif mb-2">Knowledge Universe</h2>
-                <p className="text-xs text-claude-olive-gray font-serif italic italic leading-relaxed">Live mapping of all semantic vectors and strategic assessment nodes in the global index.</p>
+                <p className="text-xs text-claude-olive-gray font-serif italic leading-relaxed">Live mapping of all semantic vectors and strategic assessment nodes in the global index.</p>
               </div>
               <GraphView />
             </motion.div>

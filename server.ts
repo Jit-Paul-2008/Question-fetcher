@@ -13,6 +13,7 @@ import Razorpay from "razorpay";
 import mammoth from "mammoth";
 import { Pinecone } from "@pinecone-database/pinecone";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { getDomainsForContext } from "./src/lib/search-taxonomy.js";
 
 // ─── Firebase Admin ───────────────────────────────────────────────────────────
 if (admin.apps.length === 0) {
@@ -116,33 +117,12 @@ async function startServer() {
 
   app.get("/api/health", (req, res) => res.json({ status: "ok" }));
 
-  // ─── Domain Mapping for Targeted Searching ──────────────────────────────────
-  const EXAM_DOMAINS: Record<string, string[]> = {
-    jee: ["mathongo.com", "esaral.com", "vedantu.com", "toppr.com", "careers360.com", "allen.ac.in", "pw.live"],
-    neet: ["aakash.ac.in", "doubtnut.com", "vedantu.com", "toppr.com", "careers360.com", "pw.live"],
-    boards: ["learncbse.in", "selfstudys.com", "shaalaa.com", "byjus.com", "ncert.nic.in", "aglasem.com", "collegedekho.com", "pw.live"],
-    default: ["byjus.com", "toppr.com", "vedantu.com", "shaalaa.com", "careers360.com", "selfstudys.com", "pw.live"]
-  };
-
-  function getIncludeDomains(exams: string[]): string[] {
-    const domains = new Set<string>();
-    if (!exams || exams.length === 0) return EXAM_DOMAINS.default;
-
-    exams.forEach(exam => {
-      const e = exam.toLowerCase();
-      if (e.includes("jee")) {
-        EXAM_DOMAINS.jee.forEach(d => domains.add(d));
-      } else if (e.includes("neet")) {
-        EXAM_DOMAINS.neet.forEach(d => domains.add(d));
-      } else if (e.includes("cbse") || e.includes("icse") || e.includes("isc") || e.includes("wbsche") || e.includes("board")) {
-        EXAM_DOMAINS.boards.forEach(d => domains.add(d));
-      }
+  function getIncludeDomains(exams: string[], subject: string, targetClass: string): string[] {
+    return getDomainsForContext({
+      exams: exams || [],
+      subject: subject || "Chemistry",
+      targetClass: targetClass || "12"
     });
-
-    // Add high-authority domains that cover all K-12 and competitive prep
-    ["byjus.com", "toppr.com", "vedantu.com", "shaalaa.com", "careers360.com", "selfstudys.com", "pw.live", "doubtnut.com", "unacademy.com", "embibe.com"].forEach(d => domains.add(d));
-
-    return domains.size > 0 ? Array.from(domains) : EXAM_DOMAINS.default;
   }
 
   // ─── Cache Key Generator (RAG) ─────────────────────────────────────────────
@@ -654,10 +634,9 @@ async function startServer() {
       }
       console.log(`[Scan] uid=${uid} subject=${subjectLabel} topic=${analysis.topicDetected} queries=${analysis.searchQueries?.length}`);
 
-      // ── STEP 2: Always exactly 3 Tavily searches — fixed cost ──
       const rawQueries = (analysis.searchQueries || []).slice(0, 3);
       const queries = rawQueries.filter((q: string) => q && q.trim().length > 0);
-      const includeDomains = getIncludeDomains(examList);
+      const includeDomains = getIncludeDomains(examList, subjectLabel, targetClass);
 
       const allSearchResults = await Promise.all(
         queries.map((q: string) =>
