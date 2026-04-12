@@ -4,7 +4,7 @@ import { ScanStatus } from "../../lib/types";
 import { SUBJECTS, EXAMS, CLASSES } from "../../lib/constants";
 
 interface GeneratorWindowProps {
-  onScan: (file: File, subject: string, exams: string[], targetClass: string) => Promise<void>;
+  onScan: (files: File[], subject: string, exams: string[], targetClass: string) => Promise<void>;
   onTopicScan: (topics: string[], subject: string, exams: string[], targetClass: string) => Promise<void>;
   status: ScanStatus;
   progress: number;
@@ -24,8 +24,9 @@ export function GeneratorWindow({
   const [selectedClass, setSelectedClass] = useState("12");
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) onScan(file, selectedSubject, selectedExams, selectedClass);
+    const fileList = e.target.files;
+    const files: File[] = fileList ? Array.from(fileList) : [];
+    if (files.length > 0) onScan(files, selectedSubject, selectedExams, selectedClass);
   };
 
   const handleToggleExam = (id: string) => {
@@ -161,7 +162,7 @@ export function GeneratorWindow({
               {isIdle ? (
                 activeMode === "scan" ? (
                   <label className="w-full cursor-pointer group">
-                    <input type="file" className="hidden" accept="image/*,.pdf" onChange={handleFileChange} />
+                    <input type="file" className="hidden" accept="image/*,.pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple onChange={handleFileChange} />
                     <div className="flex flex-col items-center text-center space-y-8 relative z-10">
                       <div className="w-32 h-32 rounded-[2.5rem] bg-card border border-white/5 flex items-center justify-center group-hover:scale-110 group-hover:border-primary/30 group-hover:shadow-[0_0_40px_rgba(0,255,242,0.1)] transition-all duration-700">
                         <Upload className="w-12 h-12 text-primary" />

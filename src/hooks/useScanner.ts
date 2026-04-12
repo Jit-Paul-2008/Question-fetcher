@@ -4,6 +4,17 @@ import { toast } from "sonner";
 import { scanSubjectNote, ScanResult } from "../lib/gemini";
 import { useScannerContext } from "../context/ScannerContext";
 
+const MAX_FILES_PER_SCAN = 8;
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error(`Failed to read file: ${file.name}`));
+    reader.readAsDataURL(file);
+  });
+}
+
 export function useScanner(user: User | null, credits: number, setCredits?: (c: number) => void) {
   const { 
     status, setStatus, 
@@ -36,7 +47,7 @@ export function useScanner(user: User | null, credits: number, setCredits?: (c: 
 
   const performScan = async (
     mode: "notes" | "topics", 
-    data: string[] | File,
+    data: string[] | File[],
     subject: string = "Science",
     exams: string[] = [],
     targetClass: string = "General"
@@ -56,19 +67,21 @@ export function useScanner(user: User | null, credits: number, setCredits?: (c: 
       const idToken = await user.getIdToken();
       let scanResult: ScanResult;
 
-      if (mode === "notes" && data instanceof File) {
+      if (mode === "notes" && Array.isArray(data)) {
+          if (data.length === 0) {
+            throw new Error("Please select at least one file.");
+          }
+          if (data.length > MAX_FILES_PER_SCAN) {
+            throw new Error(`Maximum ${MAX_FILES_PER_SCAN} files allowed per scan.`);
+          }
+
           setProgressMsg("Transmitting orbital data...");
-          const reader = new FileReader();
-          const base64Promise = new Promise<string>((resolve) => {
-              reader.onload = () => resolve(reader.result as string);
-              reader.readAsDataURL(data);
-          });
-          const base64 = await base64Promise;
+          const base64Files = await Promise.all(data.map((file) => readFileAsDataUrl(file)));
           
           setStatus("processing");
           setProgress(40);
           setProgressMsg("Analyzing molecular structure...");
-          scanResult = await scanSubjectNote([base64], "", subject, exams, targetClass, idToken);
+          scanResult = await scanSubjectNote(base64Files, "", subject, exams, targetClass, idToken);
       } else if (mode === "topics" && Array.isArray(data)) {
           setStatus("processing");
           setProgress(40);
@@ -97,8 +110,8 @@ export function useScanner(user: User | null, credits: number, setCredits?: (c: 
     }
   };
 
-  const scanFile = (file: File, subject?: string, exams?: string[], targetClass?: string) => 
-    performScan("notes", file, subject, exams, targetClass);
+  const scanFile = (files: File[], subject?: string, exams?: string[], targetClass?: string) => 
+    performScan("notes", files, subject, exams, targetClass);
     
   const scanTopics = (topics: string[], subject?: string, exams?: string[], targetClass?: string) => 
     performScan("topics", topics, subject, exams, targetClass);

@@ -5,6 +5,9 @@ import path from "path";
 import { fileURLToPath } from "url";
 import cors from "cors";
 import crypto from "crypto";
+import { spawn } from 'child_process';
+import fs from 'fs/promises';
+import { createClient } from "redis";
 import { GoogleGenAI, Type } from "@google/genai";
 import { tavily } from "@tavily/core";
 import admin from "firebase-admin";
@@ -60,6 +63,10 @@ const GEMINI_GENERATION_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const GEMINI_EMBEDDING_MODEL = process.env.GEMINI_EMBEDDING_MODEL || "";
 const CACHE_MIN_QUESTIONS = Math.max(1, parseInt(process.env.CACHE_MIN_QUESTIONS || "10", 10));
 const CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+// Verifier mode: 'annotate' (default) or 'block'
+const VERIFIER_MODE = (process.env.VERIFIER_MODE || 'annotate').toLowerCase();
+const RATE_LIMIT_REDIS_URL = process.env.RATE_LIMIT_REDIS_URL || "";
+const RATE_LIMIT_FAIL_OPEN = (process.env.RATE_LIMIT_FAIL_OPEN || "true").toLowerCase() === "true";
 
 // ─── Razorpay client (Use getRazorpay() instead) ──────────────────────────
 
@@ -140,6 +147,14 @@ async function startServer() {
   const app = express();
   const PORT = parseInt(process.env.PORT || "3000", 10);
 
+  type RateLimitBucket = { count: number; resetAt: number };
+  type RedisClient = ReturnType<typeof createClient>;
+  const rateLimitStore = new Map<string, RateLimitBucket>();
+  let redisClient: RedisClient | null = null;
+  let redisConnectPromise: Promise<RedisClient | null> | null = null;
+
+  app.set("trust proxy", true);
+
   app.use(cors());
 
   // ─── RAW BODY for Razorpay webhook ───────────────────────────────────────
@@ -157,6 +172,132 @@ async function startServer() {
     } catch {
       throw new Error("AUTH_INVALID");
     }
+  }
+
+  function getClientIp(req: express.Request): string {
+    const xff = req.headers["x-forwarded-for"];
+    if (Array.isArray(xff) && xff.length > 0) {
+      return xff[0].split(",")[0].trim();
+    }
+    if (typeof xff === "string" && xff.length > 0) {
+      return xff.split(",")[0].trim();
+    }
+    return req.socket.remoteAddress || "unknown";
+  }
+
+  async function getRedisClient(): Promise<RedisClient | null> {
+    if (!RATE_LIMIT_REDIS_URL) return null;
+    if (redisClient?.isOpen) return redisClient;
+    if (redisConnectPromise) return redisConnectPromise;
+
+    const client = createClient({
+      url: RATE_LIMIT_REDIS_URL,
+      socket: {
+        connectTimeout: 2000,
+      },
+    });
+
+    client.on("error", (err) => {
+      console.error("[RateLimit:Redis:Error]", err?.message || err);
+    });
+
+    redisConnectPromise = client.connect()
+      .then(() => {
+        console.log("[RateLimit:Redis] Connected");
+        redisClient = client;
+        return client;
+      })
+      .catch((err) => {
+        console.error("[RateLimit:Redis:ConnectFailed]", err?.message || err);
+        return null;
+      })
+      .finally(() => {
+        redisConnectPromise = null;
+      });
+
+    return redisConnectPromise;
+  }
+
+  function enforceInMemoryRateLimit(
+    req: express.Request,
+    res: express.Response,
+    key: string,
+    maxRequests: number,
+    windowMs: number
+  ): boolean {
+    const now = Date.now();
+    const bucketKey = `${key}:${getClientIp(req)}`;
+
+    if (rateLimitStore.size > 5000) {
+      for (const [k, bucket] of rateLimitStore.entries()) {
+        if (bucket.resetAt <= now) rateLimitStore.delete(k);
+      }
+    }
+
+    const existing = rateLimitStore.get(bucketKey);
+    if (!existing || existing.resetAt <= now) {
+      rateLimitStore.set(bucketKey, { count: 1, resetAt: now + windowMs });
+      return true;
+    }
+
+    if (existing.count >= maxRequests) {
+      const retryAfterSec = Math.max(1, Math.ceil((existing.resetAt - now) / 1000));
+      res.setHeader("Retry-After", String(retryAfterSec));
+      res.status(429).json({ error: "Too many requests. Please retry shortly." });
+      return false;
+    }
+
+    existing.count += 1;
+    rateLimitStore.set(bucketKey, existing);
+    return true;
+  }
+
+  async function enforceRateLimit(
+    req: express.Request,
+    res: express.Response,
+    key: string,
+    maxRequests: number,
+    windowMs: number
+  ): Promise<boolean> {
+    const now = Date.now();
+    const bucketKey = `${key}:${getClientIp(req)}`;
+    const redis = await getRedisClient();
+
+    if (redis) {
+      try {
+        const redisKey = `ratelimit:${bucketKey}`;
+        const count = await redis.incr(redisKey);
+        if (count === 1) {
+          await redis.pExpire(redisKey, windowMs);
+        }
+
+        if (count > maxRequests) {
+          const ttlMs = await redis.pTTL(redisKey);
+          const retryAfterSec = Math.max(1, Math.ceil((ttlMs > 0 ? ttlMs : windowMs) / 1000));
+          res.setHeader("Retry-After", String(retryAfterSec));
+          res.status(429).json({ error: "Too many requests. Please retry shortly." });
+          return false;
+        }
+
+        return true;
+      } catch (err: any) {
+        console.error(`[RateLimit:Redis:RuntimeError] key=${key}`, err?.message || err);
+        if (RATE_LIMIT_FAIL_OPEN) {
+          console.warn("[RateLimit] Fail-open active. Allowing request despite Redis failure.");
+          return true;
+        }
+        return enforceInMemoryRateLimit(req, res, key, maxRequests, windowMs);
+      }
+    }
+
+    if (RATE_LIMIT_REDIS_URL) {
+      if (RATE_LIMIT_FAIL_OPEN) {
+        console.warn("[RateLimit] Redis not available. Fail-open active.");
+        return true;
+      }
+    }
+
+    return enforceInMemoryRateLimit(req, res, key, maxRequests, windowMs);
   }
 
   // ─── PUBLIC CONFIG ────────────────────────────────────────────────────────
@@ -183,6 +324,100 @@ async function startServer() {
     const sortedExams = [...exams].sort().join(",");
     const raw = `${subject.toLowerCase()}|${topic.toLowerCase().trim()}|${sortedExams}`;
     return crypto.createHash("md5").update(raw).digest("hex");
+  }
+
+  // ─── In-process verifier helpers (port of scripts/verify_response.js + retrieve_facts.js)
+  const VERIFIER_STOPWORDS = new Set(['the','is','in','at','of','and','a','an','to','for','on','by','with','that','this','it','as','be','are','was','were','from','or','which','but','has','have']);
+
+  function splitSentences(text: string) {
+    return text.split(/(?<=[.!?])\s+(?=[A-Z0-9"'\u00C0-\u017F])/u);
+  }
+
+  function buildQuery(s: string) {
+    const cleaned = s.replace(/[^^\p{L}\p{N}\-\s]/gu, ' ').toLowerCase();
+    const toks = cleaned.split(/\s+/).filter(t => t && !VERIFIER_STOPWORDS.has(t) && t.length > 1);
+    return toks.join(' ');
+  }
+
+  async function walkMarkdownFiles(dir: string, out: string[]) {
+    try {
+      const items = await fs.readdir(dir, { withFileTypes: true });
+      for (const it of items) {
+        const p = path.join(dir, it.name);
+        if (it.isDirectory()) await walkMarkdownFiles(p, out);
+        else if (it.isFile() && p.endsWith('.md')) out.push(p);
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  function scoreContent(content: string, tokens: string[]) {
+    const lc = content.toLowerCase();
+    let s = 0;
+    for (const t of tokens) {
+      if (!t) continue;
+      s += (lc.split(t).length - 1);
+    }
+    return s;
+  }
+
+  async function snippetFor(content: string, tokens: string[]) {
+    const lc = content.toLowerCase();
+    for (const t of tokens) {
+      const i = lc.indexOf(t);
+      if (i !== -1) {
+        const start = Math.max(0, i - 120);
+        return content.slice(start, start + 400).replace(/\n/g, '\n');
+      }
+    }
+    return content.slice(0, 200);
+  }
+
+  async function retrieveFactsInProcess(query: string) {
+    const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
+    const root = path.resolve('memories', 'repo');
+    const files: string[] = [];
+    await walkMarkdownFiles(root, files);
+    const results: any[] = [];
+    for (const f of files) {
+      try {
+        const content = await fs.readFile(f, 'utf8');
+        const s = scoreContent(content, tokens);
+        if (s > 0) {
+          const snip = await snippetFor(content, tokens);
+          results.push({ file: path.relative(process.cwd(), f), score: s, snippet: snip });
+        }
+      } catch (e) {
+        // skip
+      }
+    }
+    results.sort((a, b) => b.score - a.score);
+    return results.slice(0, 10);
+  }
+
+  async function verifyTextInProcess(text: string) {
+    const t = (text || '').trim();
+    if (!t) throw new Error('empty input');
+    const sentences = splitSentences(t).map(s => s.trim()).filter(Boolean);
+    const report: any = { total_sentences: sentences.length, supported: [], unsupported: [], details: [] };
+
+    for (const s of sentences) {
+      const q = buildQuery(s);
+      if (!q) { report.unsupported.push(s); continue; }
+      try {
+        const results = await retrieveFactsInProcess(q);
+        if (results && results.length > 0) {
+          report.supported.push({ sentence: s, facts: results.slice(0, 5) });
+        } else {
+          report.unsupported.push(s);
+        }
+      } catch (err: any) {
+        report.details.push({ sentence: s, error: err?.message || String(err) });
+        report.unsupported.push(s);
+      }
+    }
+    return { ok: report.unsupported.length === 0, report };
   }
 
 
@@ -435,8 +670,22 @@ async function startServer() {
       const userRecord = await admin.auth().getUser(uid);
       const creatorName = userRecord.displayName || "Verified User";
 
-      // Generate a 6-digit alphanumeric code
-      const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+      // Generate a unique 6-character alphanumeric code.
+      let code = "";
+      let attempts = 0;
+      while (attempts < 5) {
+        const candidate = Math.random().toString(36).substring(2, 8).toUpperCase();
+        const existing = await db.collection("classrooms").doc(candidate).get();
+        if (!existing.exists) {
+          code = candidate;
+          break;
+        }
+        attempts += 1;
+      }
+
+      if (!code) {
+        return res.status(503).json({ error: "Unable to allocate classroom code. Try again." });
+      }
 
       await db.collection("classrooms").doc(code).set({
         ...bank,
@@ -448,6 +697,9 @@ async function startServer() {
       console.log(`[Host:Collab] uid=${uid} name=${creatorName} code=${code}`);
       res.json({ success: true, code });
     } catch (err: any) {
+      if (err.message === "AUTH_MISSING" || err.message === "AUTH_INVALID") {
+        return res.status(401).json({ error: "Authentication required" });
+      }
       res.status(500).json({ error: err.message });
     }
   });
@@ -455,11 +707,18 @@ async function startServer() {
   // ─── CLASSROOM: Join ───────────────────────────────────────────────────────
   app.post("/api/classroom/join", async (req, res) => {
     try {
-      await verifyToken(req.headers.authorization);
-      const { code } = req.body;
-      if (!code) return res.status(400).json({ error: "Code required" });
+      if (!(await enforceRateLimit(req, res, "classroom-join", 30, 60_000))) {
+        return;
+      }
 
-      const classroomRef = db.collection("classrooms").doc(code.toUpperCase());
+      await verifyToken(req.headers.authorization);
+      const code = String(req.body?.code || "").trim().toUpperCase();
+      if (!code) return res.status(400).json({ error: "Code required" });
+      if (!/^[A-Z0-9]{6}$/.test(code)) {
+        return res.status(400).json({ error: "Invalid classroom code format" });
+      }
+
+      const classroomRef = db.collection("classrooms").doc(code);
       const doc = await classroomRef.get();
       if (!doc.exists) return res.status(404).json({ error: "Classroom not found" });
 
@@ -470,6 +729,9 @@ async function startServer() {
 
       res.json({ success: true, ...doc.data() });
     } catch (err: any) {
+      if (err.message === "AUTH_MISSING" || err.message === "AUTH_INVALID") {
+        return res.status(401).json({ error: "Authentication required" });
+      }
       res.status(500).json({ error: err.message });
     }
   });
@@ -1010,6 +1272,28 @@ async function startServer() {
         questions: structured.questions || [],
       };
 
+      // Run in-process verification on the assistant reply (summary + question texts)
+      try {
+        const replyText = [finalResult.summary || '', ...(finalResult.questions || []).map((q: any) => q?.text || '')].join('\n\n');
+        const verification = await verifyTextInProcess(replyText);
+        // Annotate by default to avoid user-visible blocking. If VERIFIER_MODE=block, preserve previous blocking behavior.
+        if (!verification.ok) {
+          if (VERIFIER_MODE === 'block') {
+            // Refund 1 credit for the failed/blocked response
+            await profileRef.update({ credits: admin.firestore.FieldValue.increment(1) }).catch(() => { });
+            console.warn(`[Verifier:Blocked] uid=${uid} issues=${(verification.report?.unsupported || []).length}`);
+            return res.status(200).json({ blocked: true, reason: 'verification_failed', verification: verification.report });
+          }
+          // Annotate the final result instead of blocking
+          (finalResult as any).verification = verification.report;
+        } else {
+          (finalResult as any).verification = verification.report;
+        }
+      } catch (verErr) {
+        console.error('[Verifier] in-process verification error', verErr);
+        // On verifier failure, fail-open: do not block or modify returned result
+      }
+
       // Save to user history on the backend for reliability
       await saveToUserHistory(uid, finalResult, {
         subject: subjectLabel,
@@ -1236,6 +1520,60 @@ async function startServer() {
     } catch (err) {
       console.error("[Admin:Backfill:Error]", err);
       res.status(500).json({ error: "Backfill failed" });
+    }
+  });
+
+  // Verify assistant reply endpoint — runs the verifier script and returns report.
+  app.post("/api/verify-response", async (req, res) => {
+    try {
+      if (!(await enforceRateLimit(req, res, "verify-response", 20, 60_000))) {
+        return;
+      }
+
+      const text = req.body?.text;
+      if (typeof text !== "string" || text.trim().length === 0) {
+        return res.status(400).json({ error: "Missing text body (text)" });
+      }
+      if (text.length > 25_000) {
+        return res.status(413).json({ error: "Input too large. Maximum 25000 characters allowed." });
+      }
+
+      // Try in-process verifier first for lower latency
+      try {
+        const result = await verifyTextInProcess(text);
+        return res.status(200).json({ ok: result.ok, code: result.ok ? 0 : 1, report: result.report, source: 'in-process' });
+      } catch (inErr) {
+        console.warn('[verifier] in-process failed, falling back to child process', inErr?.message || inErr);
+      }
+
+      // Fallback: spawn the existing verifier script
+      const scriptPath = path.join(process.cwd(), "scripts", "verify_response.js");
+      const child = spawn("node", [scriptPath], { stdio: ["pipe", "pipe", "pipe"] });
+
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (chunk) => (stdout += chunk.toString()));
+      child.stderr.on("data", (chunk) => (stderr += chunk.toString()));
+
+      child.on("error", (err) => {
+        console.error("[verifier] spawn error", err);
+      });
+
+      child.stdin.write(text);
+      child.stdin.end();
+
+      child.on("close", (code) => {
+        if (stderr) console.error("[verifier] stderr", stderr);
+        try {
+          const report = stdout ? JSON.parse(stdout) : {};
+          return res.status(200).json({ ok: code === 0, code, report, source: 'child-process' });
+        } catch (err) {
+          console.error("[verifier] parse error", err, "stdout:", stdout, "stderr:", stderr);
+          return res.status(500).json({ error: "verifier parse error", stdout, stderr });
+        }
+      });
+    } catch (err) {
+      handleError(res, err, "verify-response");
     }
   });
 

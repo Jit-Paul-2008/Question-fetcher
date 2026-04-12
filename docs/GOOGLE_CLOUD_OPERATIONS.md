@@ -16,6 +16,8 @@ RAZORPAY_WEBHOOK_SECRET=
 PINECONE_API_KEY=
 TAVILY_API_KEY=
 ADMIN_SECRET=
+RATE_LIMIT_REDIS_URL=
+RATE_LIMIT_FAIL_OPEN=true
 PORT=3000
 ```
 
@@ -36,3 +38,5 @@ PORT=3000
 - Keep server-side keys only on backend runtime.
 - Never expose Razorpay secret or admin secret in client bundles.
 - Re-run `npm run build` after dependency updates.
+- For distributed abuse protection, set `RATE_LIMIT_REDIS_URL` to a managed Redis endpoint (for example Upstash or Memorystore via reachable URL).
+- Set `RATE_LIMIT_FAIL_OPEN=false` if you prefer strict protection and are okay with in-memory fallback behavior during Redis outages.

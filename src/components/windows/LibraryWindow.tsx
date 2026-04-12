@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Search, Filter, ArrowRight, Clock, Hash, FileDown, FileText, Database, Shield, Globe, UserRound } from "lucide-react";
 
 interface LibraryWindowProps {
@@ -19,10 +19,58 @@ export function LibraryWindow({
   communityLoading
 }: LibraryWindowProps) {
   const [view, setView] = useState<"personal" | "community">("personal");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterMode, setFilterMode] = useState<"all" | "recent" | "question-rich">("all");
   const sets = view === "personal" ? history : communityReports;
   const isLoading = view === "personal" ? loading : communityLoading;
   const personalCount = history.length;
   const communityCount = communityReports.length;
+
+  const visibleSets = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    return sets.filter((set) => {
+      const title = String(set.title || set.topic || set.topicDetected || "").toLowerCase();
+      const subject = String(set.subject || "").toLowerCase();
+      const author = String(set.authorName || "").toLowerCase();
+      const keywordBlob = Array.isArray(set.keywords) ? set.keywords.join(" ").toLowerCase() : "";
+
+      const matchesQuery = !normalizedQuery ||
+        title.includes(normalizedQuery) ||
+        subject.includes(normalizedQuery) ||
+        author.includes(normalizedQuery) ||
+        keywordBlob.includes(normalizedQuery);
+
+      if (!matchesQuery) return false;
+
+      if (filterMode === "question-rich") {
+        return (set.questions?.length || 0) >= 20;
+      }
+
+      if (filterMode === "recent") {
+        const rawDate = set.timestamp?.toDate ? set.timestamp.toDate() : new Date(set.timestamp);
+        const ts = rawDate instanceof Date ? rawDate.getTime() : NaN;
+        if (Number.isNaN(ts)) return false;
+        const days30 = 30 * 24 * 60 * 60 * 1000;
+        return (Date.now() - ts) <= days30;
+      }
+
+      return true;
+    });
+  }, [sets, searchQuery, filterMode]);
+
+  const cycleFilter = () => {
+    setFilterMode((prev) => {
+      if (prev === "all") return "recent";
+      if (prev === "recent") return "question-rich";
+      return "all";
+    });
+  };
+
+  const filterLabel = filterMode === "all"
+    ? "All"
+    : filterMode === "recent"
+      ? "Recent 30d"
+      : "20+ Questions";
 
   if (isLoading) {
     return (
@@ -73,12 +121,21 @@ export function LibraryWindow({
                 <input 
                     type="text" 
                     placeholder={view === "personal" ? "Query personal archive..." : "Search community reports..."}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
                     className="bg-zinc-900/50 border border-white/5 rounded-xl py-3 pl-12 pr-6 text-sm text-white placeholder:text-white/20 outline-none focus:border-neon-cyan/30 focus:ring-4 focus:ring-neon-cyan/5 transition-all w-full md:w-72"
                 />
             </div>
-            <button className="p-3.5 rounded-xl bg-zinc-900/50 border border-white/5 hover:border-white/10 text-white/40 hover:text-white transition-all shadow-xl">
+              <button
+                onClick={cycleFilter}
+                className="p-3.5 rounded-xl bg-zinc-900/50 border border-white/5 hover:border-white/10 text-white/40 hover:text-white transition-all shadow-xl"
+                title={`Filter: ${filterLabel}`}
+              >
                 <Filter className="w-4 h-4" />
             </button>
+              <div className="px-3 py-2 rounded-xl bg-zinc-900/50 border border-white/5 text-[10px] font-black uppercase tracking-[0.2em] text-white/40">
+                {filterLabel}
+              </div>
         </div>
       </div>
 
@@ -99,7 +156,7 @@ export function LibraryWindow({
         </button>
       </div>
 
-      {sets.length === 0 ? (
+      {visibleSets.length === 0 ? (
         <div className="synth-glass p-24 rounded-[2rem] text-center space-y-10 border border-white/5 bg-zinc-900/20">
             <div className="w-24 h-24 bg-white/5 rounded-[2rem] flex items-center justify-center mx-auto border border-white/5 group overflow-hidden relative">
                 <div className="absolute inset-0 bg-neon-violet/10 animate-pulse" />
@@ -108,7 +165,9 @@ export function LibraryWindow({
             <div className="space-y-4">
                 <h4 className="text-2xl font-bold text-white tracking-tight">{view === "personal" ? "VAULT IS EMPTY" : "NO COMMUNITY REPORTS"}</h4>
                 <p className="text-white/30 max-w-xs mx-auto text-sm leading-relaxed">
-                  {view === "personal"
+                  {searchQuery.trim()
+                    ? "No reports match your current search/filter settings."
+                    : view === "personal"
                     ? "No research sequences found in the persistent buffer. Complete a synthesis to archive your first find."
                     : "Nothing has been published to the community library yet."}
                 </p>
@@ -119,7 +178,7 @@ export function LibraryWindow({
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {sets.map((set, idx) => (
+          {visibleSets.map((set, idx) => (
             <div
               key={set.id}
               onClick={() => onSelect(set)}
