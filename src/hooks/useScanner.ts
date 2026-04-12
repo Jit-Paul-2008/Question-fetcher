@@ -1,15 +1,19 @@
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { User } from "firebase/auth";
-import { db } from "../lib/firebase";
-import { collection, addDoc } from "firebase/firestore";
 import { toast } from "sonner";
 import { scanSubjectNote, ScanResult } from "../lib/gemini";
-import { ScanStatus } from "../lib/types";
+import { useScannerContext } from "../context/ScannerContext";
 
 export function useScanner(user: User | null, credits: number, setCredits?: (c: number) => void) {
-  const [status, setStatus] = useState<ScanStatus>("idle");
-  const [progress, setProgress] = useState(0);
-  const [result, setResult] = useState<ScanResult | null>(null);
+  const { 
+    status, setStatus, 
+    progress, setProgress, 
+    progressMsg, setProgressMsg,
+    result, setResult, 
+    error, setError,
+    reset 
+  } = useScannerContext();
+  
   const progressTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -28,7 +32,7 @@ export function useScanner(user: User | null, credits: number, setCredits?: (c: 
     return () => {
       if (progressTimerRef.current) clearInterval(progressTimerRef.current);
     };
-  }, [status]);
+  }, [status, setProgress]);
 
   const performScan = async (
     mode: "notes" | "topics", 
@@ -43,15 +47,17 @@ export function useScanner(user: User | null, credits: number, setCredits?: (c: 
       return;
     }
 
+    setError(null);
     setStatus("uploading");
-    setProgress(30);
+    setProgress(10);
+    setProgressMsg("Establishing secure connection...");
 
     try {
       const idToken = await user.getIdToken();
       let scanResult: ScanResult;
 
       if (mode === "notes" && data instanceof File) {
-          // Convert file to base64 for the API
+          setProgressMsg("Transmitting orbital data...");
           const reader = new FileReader();
           const base64Promise = new Promise<string>((resolve) => {
               reader.onload = () => resolve(reader.result as string);
@@ -60,31 +66,34 @@ export function useScanner(user: User | null, credits: number, setCredits?: (c: 
           const base64 = await base64Promise;
           
           setStatus("processing");
-          setProgress(60);
+          setProgress(40);
+          setProgressMsg("Analyzing molecular structure...");
           scanResult = await scanSubjectNote([base64], "", subject, exams, targetClass, idToken);
       } else if (mode === "topics" && Array.isArray(data)) {
           setStatus("processing");
-          setProgress(60);
+          setProgress(40);
+          setProgressMsg("Querying tactical databases...");
           scanResult = await scanSubjectNote([], data.join(", "), subject, exams, targetClass, idToken);
       } else {
           throw new Error("Invalid scan mode or data");
       }
 
-
       setResult(scanResult);
-      setProgress(90);
-      
-      if (setCredits) setCredits(credits - 1);
-
-      setStatus("success");
       setProgress(100);
+      setStatus("success");
+      setProgressMsg("Synthesis complete.");
       toast.success("Discovery Complete");
     } catch (err: any) {
       setStatus("failed");
       setProgress(0);
+      setProgressMsg("Critical error encountered.");
+      setError(err.message || "Synthesis failed");
       toast.error(err.message || "Synthesis failed");
     } finally {
-      setTimeout(() => setStatus("idle"), 3000);
+      // Auto-reset state back to idle after a while if not success
+      if (status !== "success") {
+        setTimeout(() => setStatus("idle"), 3000);
+      }
     }
   };
 
@@ -94,5 +103,6 @@ export function useScanner(user: User | null, credits: number, setCredits?: (c: 
   const scanTopics = (topics: string[], subject?: string, exams?: string[], targetClass?: string) => 
     performScan("topics", topics, subject, exams, targetClass);
 
-  return { status, progress, scanFile, scanTopics, result };
+  return { status, progress, progressMsg, scanFile, scanTopics, result, reset, error };
 }
+

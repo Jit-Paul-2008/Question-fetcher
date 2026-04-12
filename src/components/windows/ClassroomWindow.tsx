@@ -95,132 +95,188 @@ export function ClassroomWindow({
                                 <span className="text-[10px] font-black uppercase tracking-tighter">Scholastic Targeting</span>
                             </div>
                             <p className="text-sm font-bold text-secondary truncate">{currentQuestion?.targetExam || "General Academic"}</p>
+                className="flex-1 md:flex-none flex items-center justify-center gap-3 px-6 py-3 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-neon-cyan/20 rounded-xl text-[10px] font-black text-white/60 hover:text-white uppercase tracking-[0.2em] transition-all"
+            >
+                <FileDown className="w-4 h-4 text-neon-cyan" />
+                PDF
+            </button>
+            <button 
+                onClick={() => onExport('docx')}
+                className="flex-1 md:flex-none flex items-center justify-center gap-3 px-6 py-3 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-neon-violet/20 rounded-xl text-[10px] font-black text-white/60 hover:text-white uppercase tracking-[0.2em] transition-all"
+            >
+                <FileDown className="w-4 h-4 text-neon-violet" />
+                DOCX
+            </button>
+            <button 
+                onClick={onClose}
+                className="p-3 bg-white/5 border border-white/5 hover:border-white/10 rounded-xl text-white/40 hover:text-white transition-all shadow-xl"
+            >
+                <X className="w-4 h-4" />
+            </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-full min-h-[700px]">
+        {/* Metadata Sidebar */}
+        <div className="lg:col-span-3 space-y-6 flex flex-col h-full">
+            <div className="p-8 synth-glass rounded-[2rem] border border-white/5 flex-grow space-y-10 bg-zinc-900/10">
+                <div className="space-y-6">
+                    <h3 className="text-[10px] font-black text-white/20 uppercase tracking-[0.3em] border-b border-white/5 pb-4">Sequence Stats</h3>
+                    
+                    <div className="space-y-8">
+                        <div className="flex items-start gap-4">
+                            <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/5 flex items-center justify-center">
+                                <Hash className="w-4 h-4 text-neon-cyan/50" />
+                            </div>
+                            <div className="space-y-1">
+                                <p className="text-[9px] font-bold text-white/30 uppercase tracking-widest">Protocol ID</p>
+                                <p className="text-xs font-mono text-white/80 font-bold tracking-tighter">#SYN_{activeSet.id?.slice(0, 10) || "NULL"}</p>
+                            </div>
                         </div>
-                        
-                        <div className="grid grid-cols-2 gap-4">
-                           <div className="bg-background rounded-2xl p-5 space-y-2">
-                                <span className="text-[9px] font-black uppercase tracking-tighter text-primary/40 block">Vantage Year</span>
-                                <p className="text-xs font-bold text-secondary">{currentQuestion?.year || "Active"}</p>
-                           </div>
-                           <div className="bg-background rounded-2xl p-5 space-y-2">
-                                <span className="text-[9px] font-black uppercase tracking-tighter text-primary/40 block">Taxonomy</span>
-                                <p className="text-xs font-bold text-secondary uppercase">{currentQuestion?.type || "MCQ"}</p>
-                           </div>
+
+                        <div className="flex items-start gap-4">
+                            <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/5 flex items-center justify-center">
+                                <Clock className="w-4 h-4 text-neon-violet/50" />
+                            </div>
+                            <div className="space-y-1">
+                                <p className="text-[9px] font-bold text-white/30 uppercase tracking-widest">Initialization</p>
+                                <p className="text-xs font-bold text-white/80 tracking-tight">
+                                    {new Date(activeSet.timestamp?.toDate ? activeSet.timestamp.toDate() : activeSet.timestamp).toLocaleDateString()}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-start gap-4">
+                            <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/5 flex items-center justify-center">
+                                <Activity className="w-4 h-4 text-neon-cyan/50" />
+                            </div>
+                            <div className="space-y-1">
+                                <p className="text-[9px] font-bold text-white/30 uppercase tracking-widest">Resolution Type</p>
+                                <p className="text-xs font-black text-neon-cyan uppercase tracking-tighter italic">{currentQuestion?.type || "MCQ_NODE"}</p>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <div className="pt-8">
-                    <button className="w-full flex items-center justify-between p-5 bg-background/50 hover:bg-primary hover:text-white rounded-2xl transition-all shadow-sm group">
-                        <div className="flex items-center gap-4">
-                            <Map className="w-5 h-5 text-accent group-hover:text-white" />
-                            <span className="text-xs font-bold">Relational Map</span>
+                <div className="pt-8 space-y-4">
+                    <button className="w-full flex items-center justify-between p-4 bg-white/5 hover:bg-neon-cyan/10 border border-white/5 hover:border-neon-cyan/30 rounded-xl transition-all group overflow-hidden relative">
+                        <div className="absolute inset-0 bg-gradient-to-r from-neon-cyan/0 via-neon-cyan/5 to-neon-cyan/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
+                        <div className="flex items-center gap-3 relative z-10">
+                            <Cpu className="w-4 h-4 text-neon-cyan group-hover:animate-pulse" />
+                            <span className="text-[10px] font-black uppercase tracking-widest text-white/40 group-hover:text-white">Neural Optimizer</span>
                         </div>
-                        <ExternalLink className="w-4 h-4 opacity-20" />
+                        <Activity className="w-3 h-3 text-white/10 relative z-10" />
                     </button>
+                    <div className="p-4 bg-zinc-900/30 rounded-xl border border-white/5">
+                         <div className="flex items-center gap-2 mb-2">
+                            <ShieldCheck className="w-3.5 h-3.5 text-neon-violet" />
+                            <span className="text-[8px] font-black text-white/20 uppercase tracking-widest">Integrity Check</span>
+                         </div>
+                         <p className="text-[10px] font-medium text-white/40 leading-relaxed italic">Verification protocol Alpha-9 validated data structure.</p>
+                    </div>
                 </div>
             </div>
         </div>
 
         {/* Synthesis Carousel View */}
-        <div className="lg:col-span-9 space-y-8">
-            <div className="terra-glass min-h-[650px] relative rounded-[4rem] flex flex-col items-center justify-start p-10 md:p-20 overflow-hidden">
-                {/* Navigation Controls (Embedded Tonal) */}
-                <div className="absolute inset-y-0 left-6 flex items-center z-10">
+        <div className="lg:col-span-9 space-y-6 flex flex-col h-full">
+            <div className="synth-glass min-h-[650px] relative rounded-[2.5rem] flex flex-col items-center justify-start p-10 md:p-16 border border-white/5 bg-zinc-900/5 overflow-hidden flex-grow shadow-2xl">
+                {/* Visual Ambience */}
+                <div className="absolute top-0 right-0 w-64 h-64 bg-neon-cyan/5 blur-[100px] rounded-full opacity-50" />
+                <div className="absolute bottom-0 left-0 w-64 h-64 bg-neon-violet/5 blur-[100px] rounded-full opacity-50" />
+
+                {/* Navigation Overlays */}
+                <div className="absolute inset-y-0 left-6 flex items-center z-10 pointer-events-none">
                     <button 
                         onClick={prevQuestion}
                         disabled={currentIndex === 0}
-                        className="w-16 h-16 rounded-3xl bg-background/50 backdrop-blur-md flex items-center justify-center hover:bg-primary hover:text-white transition-all shadow-lg disabled:opacity-0 group"
+                        className="w-14 h-14 rounded-2xl bg-zinc-900/80 backdrop-blur-md border border-white/10 flex items-center justify-center hover:bg-neon-cyan/20 hover:text-neon-cyan hover:border-neon-cyan/40 transition-all shadow-2xl disabled:opacity-0 group pointer-events-auto"
                     >
-                        <ChevronLeft className="w-8 h-8 group-hover:-translate-x-1 transition-transform" />
+                        <ChevronLeft className="w-6 h-6 group-hover:-translate-x-1 transition-transform" />
                     </button>
                 </div>
 
-                <div className="absolute inset-y-0 right-6 flex items-center z-10">
+                <div className="absolute inset-y-0 right-6 flex items-center z-10 pointer-events-none">
                     <button 
                         onClick={nextQuestion}
                         disabled={currentIndex === questions.length - 1}
-                        className="w-16 h-16 rounded-3xl bg-background/50 backdrop-blur-md flex items-center justify-center hover:bg-primary hover:text-white transition-all shadow-lg disabled:opacity-0 group"
+                        className="w-14 h-14 rounded-2xl bg-zinc-900/80 backdrop-blur-md border border-white/10 flex items-center justify-center hover:bg-neon-cyan/20 hover:text-neon-cyan hover:border-neon-cyan/40 transition-all shadow-2xl disabled:opacity-0 group pointer-events-auto"
                     >
-                        <ChevronRight className="w-8 h-8 group-hover:translate-x-1 transition-transform" />
+                        <ChevronRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
                     </button>
                 </div>
 
                 {currentQuestion && (
-                    <div className="space-y-16 animate-terra-in w-full max-w-4xl mx-auto flex flex-col h-full">
-                        <div className="text-center space-y-10 pt-4">
-                            <div className="inline-flex px-6 py-2 bg-primary/10 rounded-full">
-                              <span className="text-[11px] font-black uppercase tracking-[0.3em] text-primary">Intelligence Node {currentIndex + 1}</span>
+                    <div className="space-y-12 animate-in fade-in zoom-in-95 duration-700 w-full max-w-4xl mx-auto flex flex-col h-full relative z-10">
+                        <div className="text-center space-y-8 pt-4">
+                            <div className="inline-flex px-5 py-1.5 bg-neon-cyan/10 border border-neon-cyan/20 rounded-full">
+                              <span className="text-[10px] font-black uppercase tracking-[0.3em] text-neon-cyan">Intelligence_Node [{String(currentIndex + 1).padStart(2, '0')}]</span>
                             </div>
-                            <h4 className="text-3xl md:text-5xl font-serif font-black text-primary leading-[1.2] tracking-tight">
+                            <h4 className="text-2xl md:text-4xl font-black text-white leading-tight tracking-tight italic">
                                 {currentQuestion.text}
                             </h4>
                         </div>
 
                         {/* Options Layer (Grid layout for MCQs) */}
                         {currentQuestion.options && currentQuestion.options.length > 0 ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full pt-10">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 w-full pt-6">
                                 {currentQuestion.options.map((opt: string, i: number) => (
                                     <div key={i} className="group relative">
-                                        <div className="absolute -left-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-accent text-white rounded-xl flex items-center justify-center font-black shadow-lg shadow-accent/20 z-10 text-xs">
+                                        <div className="absolute -left-3 top-1/2 -translate-y-1/2 w-9 h-9 bg-zinc-900 text-neon-cyan rounded-lg border border-neon-cyan/40 flex items-center justify-center font-black shadow-[0_0_15px_rgba(0,255,242,0.15)] z-20 text-[10px]">
                                             {String.fromCharCode(65 + i)}
                                         </div>
-                                        <div className="bg-background/80 hover:bg-background p-8 pl-12 rounded-[2rem] transition-all duration-300 shadow-sm hover:shadow-xl hover:-translate-y-1 text-sm font-bold text-secondary/80 leading-relaxed">
+                                        <div className="bg-[#0a0a0a] border border-white/5 group-hover:border-neon-cyan/30 p-6 pl-12 rounded-2xl transition-all duration-500 shadow-xl group-hover:-translate-y-1 text-sm font-bold text-white/60 group-hover:text-white leading-relaxed">
                                             {opt}
                                         </div>
                                     </div>
                                 ))}
                             </div>
                         ) : (
-                            <div className="flex-1 flex flex-col items-center justify-center pt-10">
-                                <div className="max-w-2xl w-full p-12 bg-muted/40 rounded-[3rem] relative shadow-inner">
-                                    <div className="absolute -top-5 left-1/2 -translate-x-1/2 px-8 py-2.5 bg-accent text-white text-[11px] font-black uppercase tracking-[0.2em] rounded-2xl shadow-xl">
+                            <div className="flex-1 flex flex-col items-center justify-center py-10">
+                                <div className="max-w-2xl w-full p-10 bg-white/5 rounded-[2rem] relative border border-white/5 overflow-hidden group">
+                                    <div className="absolute inset-0 bg-gradient-to-br from-neon-violet/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
+                                    <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-6 py-2 bg-neon-violet border border-neon-violet/50 text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-xl shadow-[0_0_20px_rgba(184,112,255,0.4)] z-20">
                                         Synthesis Resolution
                                     </div>
-                                    <p className="text-2xl font-serif text-secondary/90 italic leading-relaxed text-center px-4 pt-4">
-                                        "{currentQuestion.answer || "Scanning for conceptual resolution..."}"
+                                    <p className="text-xl text-white font-bold leading-relaxed text-center px-4 pt-6 italic relative z-10 transition-all group-hover:scale-[1.02] duration-700">
+                                        {currentQuestion.answer || "Scanning for conceptual resolution..."}
                                     </p>
                                 </div>
                             </div>
                         )}
 
-                        {/* Answer Disclosure (Only if options exist) */}
-                        {currentQuestion.options && currentQuestion.options.length > 0 && (
-                            <div className="mt-auto pt-16 flex justify-center">
-                                <button className="group relative overflow-hidden bg-muted/60 hover:bg-accent hover:text-white px-12 py-5 rounded-[2rem] transition-all duration-500 font-black text-xs uppercase tracking-[0.3em]">
-                                    <span className="relative z-10">Reveal Verified Answer</span>
-                                </button>
-                            </div>
-                        )}
+                        {/* Pagination Indicator */}
+                        <div className="mt-auto pt-12 flex justify-center gap-2 pb-4">
+                            {questions.map((_: any, i: number) => (
+                                <div 
+                                    key={i} 
+                                    className={`h-1 rounded-full transition-all duration-700 cursor-pointer ${i === currentIndex ? 'w-10 bg-neon-cyan shadow-[0_0_8px_rgba(0,255,242,0.8)]' : 'w-2 bg-white/10 hover:bg-white/30'}`}
+                                    onClick={() => setCurrentIndex(i)}
+                                />
+                            ))}
+                        </div>
                     </div>
                 )}
-
-                <div className="absolute bottom-10 inset-x-0 flex justify-center gap-3">
-                    {questions.map((_, i) => (
-                        <div 
-                            key={i} 
-                            className={`h-2 rounded-full transition-all duration-700 cursor-pointer ${i === currentIndex ? 'w-12 bg-primary' : 'w-3 bg-primary/20 hover:bg-primary/40'}`}
-                            onClick={() => setCurrentIndex(i)}
-                        />
-                    ))}
-                </div>
             </div>
 
-            {/* Verification Bar */}
-            <div className="flex items-center justify-between px-10 bg-muted/20 py-6 rounded-[2.5rem]">
-                <div className="flex items-center gap-4">
-                    <div className="w-3 h-3 rounded-full bg-primary shadow-[0_0_15px_rgba(74,124,89,0.4)] animate-pulse" />
-                    <span className="text-[10px] font-black text-secondary/60 uppercase tracking-[0.2em]">Neural Processing Online</span>
-                </div>
-                <div className="flex items-center gap-12">
-                    <div className="flex items-center gap-3 opacity-60">
-                        <Users className="w-5 h-5 text-accent" />
-                        <span className="text-[10px] font-black text-secondary uppercase tracking-tight">Verified Community Pool</span>
+            {/* Verification Console */}
+            <div className="flex flex-col md:flex-row items-center justify-between px-8 bg-zinc-900/40 border border-white/5 py-4 rounded-2xl shadow-xl">
+                <div className="flex items-center gap-4 mb-4 md:mb-0">
+                    <div className="relative">
+                        <div className="w-2.5 h-2.5 rounded-full bg-neon-cyan shadow-[0_0_12px_rgba(0,255,242,0.6)] animate-pulse" />
+                        <div className="absolute inset-0 w-2.5 h-2.5 rounded-full bg-neon-cyan animate-ping opacity-40" />
                     </div>
-                    <div className="h-5 w-px bg-primary/10" />
+                    <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Neural_Processing_Stable</span>
+                </div>
+                <div className="flex items-center gap-8">
                     <div className="flex items-center gap-3">
-                        <ShieldCheck className="w-5 h-5 text-primary opacity-60" />
-                        <span className="text-[10px] font-black text-secondary/40 uppercase tracking-widest">Protocol V3.2 Stable</span>
+                        <Terminal className="w-4 h-4 text-neon-violet/50" />
+                        <span className="text-[10px] font-black text-white/40 uppercase tracking-tight">Logic_Kernel_v9.2</span>
+                    </div>
+                    <div className="h-4 w-px bg-white/10" />
+                    <div className="flex items-center gap-3">
+                        <Zap className="w-4 h-4 text-neon-cyan/50" />
+                        <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">Synthesis_Sync [1.2ms]</span>
                     </div>
                 </div>
             </div>

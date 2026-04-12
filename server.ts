@@ -791,28 +791,41 @@ async function startServer() {
 
       let structured: any = {};
       try {
-        structured = JSON.parse(structuredText || "{}");
+        if (!structuredText) throw new Error("Empty AI response");
+        structured = JSON.parse(structuredText);
 
         // ── Post-processing: Source detail & Deduplication ──
         if (structured.questions && Array.isArray(structured.questions)) {
           const uniqueTexts = new Set<string>();
-          structured.questions = structured.questions.filter((q: any) => {
-            if (q.source) {
-              q.source = q.source.replace(/https?:\/\/[^\s]+/g, "").trim();
-              if (!q.source) q.source = "Standard Practice Question";
-            }
-            const normalizedText = (q.text || q.question || "").toLowerCase().replace(/\s+/g, " ").trim();
-            if (!normalizedText || uniqueTexts.has(normalizedText)) return false;
-            uniqueTexts.add(normalizedText);
-            // Enforce 'text' property for consistency
-            q.text = q.text || q.question;
-            delete q.question;
-            return true;
-          });
+          structured.questions = structured.questions
+            .filter((q: any) => q && typeof q === 'object') // Defensive check for null/invalid items
+            .filter((q: any) => {
+              if (q.source) {
+                q.source = q.source.replace(/https?:\/\/[^\s]+/g, "").trim();
+                if (!q.source) q.source = "Standard Practice Question";
+              }
+              
+              // Handle both 'text' and 'question' properties for backward/AI compatibility
+              const rawText = q.text || q.question || "";
+              const normalizedText = typeof rawText === 'string' 
+                ? rawText.toLowerCase().replace(/\s+/g, " ").trim()
+                : "";
+                
+              if (!normalizedText || uniqueTexts.has(normalizedText)) return false;
+              uniqueTexts.add(normalizedText);
+              
+              // Enforce 'text' property for consistency in UI and exports
+              q.text = rawText;
+              delete q.question;
+              return true;
+            });
+        } else {
+          structured.questions = [];
         }
-      } catch (err) {
+      } catch (err: any) {
+        console.error("[Scan:StructuringError]", err, "Raw:", structuredText);
         await profileRef.update({ credits: admin.firestore.FieldValue.increment(1) }).catch(() => { });
-        return res.status(500).json({ error: "AI structuring format error. Please try again." });
+        return res.status(500).json({ error: "AI structuring format error. Credits refunded. Please try again." });
       }
       console.log(`[Scan] Extracted ${structured.questions?.length || 0} unique questions`);
 

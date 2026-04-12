@@ -1,5 +1,5 @@
 import React from "react";
-import { LogOut, Gem, Sun, Moon, FlaskConical } from "lucide-react";
+import { LogOut, Gem, Sun, Moon, FlaskConical, LayoutGrid, Library, Users, Map, Settings, ChevronRight, Activity, ShieldCheck, Database } from "lucide-react";
 import { ActiveTab, Theme } from "../../lib/types";
 
 interface ShellProps {
@@ -23,91 +23,202 @@ export function Shell({
   onLogout,
   onOpenBuyModal
 }: ShellProps) {
+  const navItems = [
+    { id: "generator", label: "Synthesis Core", icon: LayoutGrid, desc: "AI Question Engine" },
+    { id: "library", label: "Tactical Archive", icon: Library, desc: "Personal Vault" },
+    { id: "classrooms", label: "Strategic Ops", icon: Users, desc: "Collaborative Nodes" },
+    { id: "map", label: "Neural Net", icon: Map, desc: "Knowledge Graph" },
+  ];
+
   return (
-    <div className="min-h-screen bg-background text-foreground font-sans p-6 md:p-16 relative overflow-x-hidden transition-colors duration-1000">
-      {/* Organic texture overlays */}
-      <div className="fixed inset-0 pointer-events-none z-[100] opacity-[0.02] mix-blend-multiply" style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/sandpaper.png")' }} />
-      
-      <div className="max-w-6xl mx-auto relative z-10 animate-terra-in">
-        <header className="mb-20 relative flex flex-col items-center">
-          <div className="absolute top-0 right-0 flex items-center gap-6">
-            <button 
-              onClick={onOpenBuyModal} 
-              className="bg-card px-5 py-2.5 rounded-2xl shadow-terra-soft flex items-center gap-3 hover:bg-muted transition-all group"
-            >
-              <Gem className="w-4 h-4 text-accent" />
-              <div className="flex flex-col items-start leading-none">
-                <span className="text-[10px] font-black uppercase tracking-widest text-secondary/40">Units</span>
-                <span className="text-sm font-bold text-secondary">{credits}</span>
+    <div className="min-h-screen bg-background text-foreground font-sans flex overflow-hidden grid-pattern">
+      {/* Dynamic Background Effects */}
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/5 blur-[120px] rounded-full" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-accent/5 blur-[120px] rounded-full" />
+      </div>
+
+      {/* Primary HUD Navigation (Sidebar) */}
+      <aside className="w-80 border-r border-white/5 flex flex-col z-50 relative bg-black/20 backdrop-blur-md">
+        {/* Branding & Status */}
+        <div className="p-8 pb-4">
+          <div className="flex items-center gap-4 mb-8">
+            <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center border border-primary/20 glow-cyan">
+              <FlaskConical className="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold tracking-tight text-white font-display uppercase italic">ChemScan</h1>
+              <div className="flex items-center gap-1.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                <span className="text-[9px] font-black uppercase tracking-[0.2em] text-primary">Core Reactive</span>
               </div>
+            </div>
+          </div>
+          
+          <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 space-y-3 hud-border">
+            <div className="flex items-center justify-between text-[10px] uppercase font-bold tracking-widest text-white/40">
+              <span className="flex items-center gap-2"><Activity className="w-3 h-3 text-primary" /> System Load</span>
+              <span className="text-primary italic">Nominal</span>
+            </div>
+            <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
+              <div className="h-full bg-primary w-[32%] shadow-[0_0_10px_var(--glow-cyan)]" />
+            </div>
+          </div>
+        </div>
+
+        {/* Global Navigation */}
+        <nav className="flex-1 px-4 py-8 space-y-2">
+          <p className="px-4 text-[10px] font-bold uppercase tracking-widest text-white/20 mb-6">Execution Modules</p>
+          {navItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id as any)}
+              className={`w-full text-left group transition-all duration-500 relative ${
+                activeTab === item.id ? "mb-4" : ""
+              }`}
+            >
+              <div className={`flex items-center gap-4 px-4 py-4 rounded-2xl transition-all duration-300 relative z-10 ${
+                activeTab === item.id
+                  ? "bg-primary text-primary-foreground glow-cyan scale-[1.02]"
+                  : "text-white/40 hover:bg-white/[0.03] hover:text-white/60"
+              }`}>
+                <item.icon className="w-5 h-5" />
+                <div className="flex flex-col">
+                  <span className="font-bold text-sm tracking-tight">{item.label}</span>
+                  {activeTab === item.id && (
+                    <span className="text-[10px] font-medium opacity-70 animate-in slide-in-from-left-2 duration-500">{item.desc}</span>
+                  )}
+                </div>
+                {activeTab === item.id && <ChevronRight className="w-4 h-4 ml-auto" />}
+              </div>
+              {/* Active Tab Indicator Glow */}
+              {activeTab === item.id && (
+                <div className="absolute -left-2 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary rounded-full blur-[2px]" />
+              )}
             </button>
+          ))}
+        </nav>
+
+        {/* Resource Allocation */}
+        <div className="p-6 mt-auto">
+          <div className="p-6 rounded-[2rem] synth-glass space-y-4 border border-white/10 group overflow-hidden relative">
+            {/* Background Grain */}
+            <div className="absolute inset-0 opacity-[0.03] pointer-events-none grid-pattern" />
             
-            <div className="flex items-center gap-2 bg-card p-1 rounded-2xl shadow-terra-soft">
-                <button 
-                    onClick={theme === 'light' ? toggleTheme : toggleTheme}
-                    className="p-2.5 rounded-xl hover:bg-primary/5 transition-all text-secondary"
-                >
-                    {theme === "light" ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
-                </button>
+            <div className="flex items-center justify-between relative z-10">
+              <div className="flex flex-col">
+                <span className="text-[10px] font-bold text-white/40 tracking-widest uppercase">Discovery Units</span>
+                <span className="text-3xl font-bold tracking-tighter text-white">{credits}</span>
+              </div>
+              <div className="w-12 h-12 bg-primary/20 rounded-2xl flex items-center justify-center border border-primary/20">
+                <Gem className="w-5 h-5 text-primary" />
+              </div>
+            </div>
+            
+            <button 
+                onClick={onOpenBuyModal}
+                className="w-full py-3 rounded-xl bg-primary text-primary-foreground text-xs font-black uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all relative z-10"
+            >
+                Allocation Access
+            </button>
+          </div>
+        </div>
+      </aside>
 
-                <div className="w-px h-6 bg-primary/5" />
+      {/* Operational Content Area */}
+      <div className="flex-1 flex flex-col relative overflow-hidden">
+        {/* Superior HUD Bar */}
+        <header className="h-28 px-12 flex items-center justify-between z-40 bg-background/40 backdrop-blur-xl border-b border-white/5">
+          <div className="space-y-1">
+            <div className="flex items-center gap-3">
+              <div className="px-3 py-1 bg-accent/10 border border-accent/20 rounded-full">
+                <span className="text-[9px] font-black uppercase tracking-widest text-accent">Active Protocol</span>
+              </div>
+              <Activity className="w-3 h-3 text-primary animate-pulse" />
+            </div>
+            <h2 className="text-3xl font-display font-black text-white uppercase italic tracking-tight translate-x-1">
+              {activeTab.replace("-", " ")}
+            </h2>
+          </div>
 
-                <div className="relative group/profile flex items-center gap-3 pl-2 pr-4 py-1.5 cursor-pointer hover:bg-primary/5 rounded-xl transition-all">
-                    <div className="w-8 h-8 rounded-lg bg-accent/20 flex items-center justify-center overflow-hidden">
-                        <img 
-                            src={`https://api.dicebear.com/7.x/bottts/svg?seed=${credits}`} 
-                            alt="Profile" 
-                            className="w-full h-full object-cover"
-                        />
+          <div className="flex items-center gap-6">
+            <div className="hidden lg:flex items-center gap-8 mr-8">
+              <div className="flex flex-col items-end">
+                <span className="text-[10px] font-bold text-white/20 uppercase tracking-widest">Network Status</span>
+                <span className="text-[11px] font-bold text-primary flex items-center gap-2">
+                  Encrypted <ShieldCheck className="w-3 h-3" />
+                </span>
+              </div>
+              <div className="flex flex-col items-end">
+                <span className="text-[10px] font-bold text-white/20 uppercase tracking-widest">Database Sync</span>
+                <span className="text-[11px] font-bold text-accent flex items-center gap-2">
+                  Connected <Database className="w-3 h-3" />
+                </span>
+              </div>
+            </div>
+
+            <button 
+                onClick={toggleTheme}
+                className="w-12 h-12 flex items-center justify-center rounded-2xl bg-white/[0.03] border border-white/5 hover:bg-white/5 transition-all text-white/60 hover:text-white"
+            >
+                {theme === "light" ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+            </button>
+
+            <div className="w-px h-8 bg-white/10" />
+
+            {/* Researcher Profile */}
+            <div className="relative group/profile flex items-center gap-4 h-14 pl-2 pr-4 rounded-2xl cursor-pointer hover:bg-white/[0.03] transition-all border border-transparent hover:border-white/5">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center overflow-hidden border border-white/10 glow-cyan">
+                    <img 
+                        src={`https://api.dicebear.com/7.x/bottts/svg?seed=${credits}`} 
+                        alt="Profile" 
+                        className="w-full h-full object-cover"
+                    />
+                </div>
+                <div className="hidden md:flex flex-col items-start">
+                    <span className="text-xs font-bold text-white uppercase tracking-tight">Researcher Core</span>
+                    <span className="text-[9px] text-white/30 font-black uppercase tracking-widest">Lvl 4 Practitioner</span>
+                </div>
+
+                {/* Profile Controls (Tactical Dropdown) */}
+                <div className="absolute top-[calc(100%+12px)] right-0 w-64 p-2 synth-glass rounded-[2rem] opacity-0 translate-y-4 pointer-events-none group-hover/profile:opacity-100 group-hover/profile:translate-y-0 group-hover/profile:pointer-events-auto transition-all z-[60] border border-white/10 shadow-[0_20px_40px_rgba(0,0,0,0.8)]">
+                    <div className="p-4 border-b border-white/5 mb-2">
+                        <p className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-1">Authorization</p>
+                        <p className="text-xs font-bold text-white">session_alpha_active</p>
                     </div>
-                    <div className="hidden md:flex flex-col items-start leading-none">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-secondary/40">Researcher</span>
-                        <span className="text-xs font-bold text-secondary">Settings</span>
-                    </div>
-
-                    {/* Simple Dropdown Overlay */}
-                    <div className="absolute top-full right-0 mt-2 w-48 bg-card rounded-2xl shadow-xl opacity-0 translate-y-2 pointer-events-none group-hover/profile:opacity-100 group-hover/profile:translate-y-0 group-hover/profile:pointer-events-auto transition-all z-50 p-2">
-                        <button className="w-full text-left px-4 py-2.5 text-xs font-bold text-secondary hover:bg-primary/5 rounded-xl transition-all">Account Profile</button>
-                        <button className="w-full text-left px-4 py-2.5 text-xs font-bold text-secondary hover:bg-primary/5 rounded-xl transition-all">Subscription</button>
-                        <div className="h-px bg-primary/5 my-1" />
-                        <button onClick={onLogout} className="w-full text-left px-4 py-2.5 text-xs font-bold text-destructive hover:bg-destructive/5 rounded-xl transition-all flex items-center gap-2">
-                            <LogOut className="w-3 h-3" /> Logout
-                        </button>
+                    <div className="space-y-1">
+                      <button className="w-full text-left px-4 py-3 text-[11px] font-bold text-white/60 hover:text-white hover:bg-white/5 rounded-2xl transition-all flex items-center gap-3">
+                          <Settings className="w-4 h-4 text-white/40" /> Archive Preferences
+                      </button>
+                      <button onClick={onLogout} className="w-full text-left px-4 py-3 text-[11px] font-bold text-destructive hover:bg-destructive/10 rounded-2xl transition-all flex items-center gap-3">
+                          <LogOut className="w-4 h-4" /> Terminate Link
+                      </button>
                     </div>
                 </div>
             </div>
           </div>
-          
-          <div className="w-20 h-20 bg-primary/10 text-primary rounded-[2rem] flex items-center justify-center mb-8 rotate-3 hover:rotate-0 transition-transform duration-500">
-            <FlaskConical className="w-10 h-10" />
-          </div>
-          
-          <div className="text-center space-y-2">
-            <h1 className="text-5xl md:text-7xl font-serif font-semibold tracking-tight text-primary">ChemScan</h1>
-            <p className="calligraphy text-2xl text-accent opacity-80">Organic Knowledge Generation</p>
-          </div>
-          
-          <nav className="flex flex-wrap justify-center gap-2 mt-12 bg-muted/30 p-1.5 rounded-2xl">
-            {["generator", "library", "classrooms", "map"].map(t => (
-              <button
-                key={t}
-                onClick={() => setActiveTab(t as any)}
-                className={`px-8 py-3 rounded-xl text-xs font-bold capitalize transition-all duration-500 ${
-                    activeTab === t 
-                    ? "bg-primary text-primary-foreground shadow-terra-soft -translate-y-0.5" 
-                    : "text-secondary hover:text-primary hover:bg-primary/5"
-                }`}
-              >
-                {t === 'map' ? 'Knowledge Map' : t}
-              </button>
-            ))}
-          </nav>
         </header>
 
-        <main className="pb-12">
-          {children}
+        {/* Feature Window Container (Main Interaction) */}
+        <main className="flex-1 overflow-y-auto px-12 py-10 relative">
+            {/* Viewport Corners Decals */}
+            <div className="absolute top-4 left-4 w-4 h-4 border-t border-l border-white/10 pointer-events-none" />
+            <div className="absolute top-4 right-4 w-4 h-4 border-t border-r border-white/10 pointer-events-none" />
+            <div className="absolute bottom-4 left-4 w-4 h-4 border-b border-l border-white/10 pointer-events-none" />
+            <div className="absolute bottom-4 right-4 w-4 h-4 border-b border-r border-white/10 pointer-events-none" />
+
+            <div className="max-w-7xl mx-auto h-full">
+                {children}
+            </div>
         </main>
+      </div>
+
+      {/* Aesthetic Scan-line Decal */}
+      <div className="fixed inset-0 pointer-events-none z-[100] overflow-hidden opacity-[0.02]">
+        <div className="w-full h-[1px] bg-primary animate-scan" style={{ boxShadow: '0 0 10px var(--glow-cyan)' }} />
       </div>
     </div>
   );
 }
+
+

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Upload, Plus, X, Cpu, FileText, Send, Loader2, Binary, GraduationCap, Target } from "lucide-react";
+import { Upload, Plus, X, Cpu, FileText, Send, Loader2, Binary, GraduationCap, Target, Zap, Waves, Boxes } from "lucide-react";
 import { ScanStatus } from "../../lib/types";
 import { SUBJECTS, EXAMS, CLASSES } from "../../lib/constants";
 
@@ -49,54 +49,54 @@ export function GeneratorWindow({
   const isProcessing = ["uploading", "processing"].includes(status);
 
   return (
-    <div className="max-w-5xl mx-auto space-y-12 animate-terra-in">
+    <div className="space-y-8 animate-in fade-in duration-700">
       <div className="flex flex-col lg:flex-row gap-8 items-stretch">
-        {/* Control Panel (Tonal Background, No Borders) */}
-        <div className="w-full lg:w-96 space-y-6">
-          <div className="terra-card-tonal space-y-8 h-full">
+        
+        {/* Strategic Parameters Panel */}
+        <aside className="w-full lg:w-80 space-y-6">
+          <div className="synth-panel space-y-8">
             <div>
-              <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-secondary/60 mb-6">Discovery Mode</h3>
-              <div className="space-y-2">
+              <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40 mb-6 px-2">Synthesis Protocol</h3>
+              <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={() => setActiveMode("scan")}
-                  className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all duration-300 ${
+                  className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl transition-all duration-300 border ${
                     activeMode === "scan" 
-                    ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-[1.02]" 
-                    : "hover:bg-primary/10 text-secondary"
+                    ? "bg-primary/10 border-primary/40 text-primary shadow-[0_0_20px_rgba(0,255,242,0.1)]" 
+                    : "bg-white/[0.02] border-transparent text-white/40 hover:bg-white/[0.05]"
                   }`}
                 >
-                  <FileText className="w-5 h-5 opacity-80" />
-                  <span className="text-sm font-bold">Document Scan</span>
+                  <FileText className="w-5 h-5" />
+                  <span className="text-[10px] font-bold">SCAN</span>
                 </button>
                 <button
                   onClick={() => setActiveMode("topic")}
-                  className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all duration-300 ${
+                  className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl transition-all duration-300 border ${
                     activeMode === "topic" 
-                    ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-[1.02]" 
-                    : "hover:bg-primary/10 text-secondary"
+                    ? "bg-primary/10 border-primary/40 text-primary shadow-[0_0_20px_rgba(0,255,242,0.1)]" 
+                    : "bg-white/[0.02] border-transparent text-white/40 hover:bg-white/[0.05]"
                   }`}
                 >
-                  <Cpu className="w-5 h-5 opacity-80" />
-                  <span className="text-sm font-bold">Concept Mining</span>
+                  <Cpu className="w-5 h-5" />
+                  <span className="text-[10px] font-bold">TOPIC</span>
                 </button>
               </div>
             </div>
 
-            {/* Parameter Selection (Embedded Tonal Layers) */}
-            <div className="pt-8 space-y-8">
+            <div className="space-y-8">
               <div>
-                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-secondary/60 mb-4 flex items-center gap-2">
-                  <Binary className="w-3 h-3" /> Academy Domain
-                </h3>
+                <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/20 mb-3 block flex items-center gap-2">
+                  <Binary className="w-3 h-3" /> Academic Stream
+                </label>
                 <select 
                   value={selectedSubject}
                   onChange={(e) => setSelectedSubject(e.target.value)}
-                  className="w-full bg-background/50 border-none rounded-xl py-3.5 px-4 text-[13px] font-bold text-secondary shadow-sm hover:shadow-md transition-all cursor-pointer focus:ring-2 focus:ring-primary/20 appearance-none"
+                  className="w-full bg-white/[0.02] border border-white/5 rounded-xl py-3 px-4 text-xs font-bold text-white outline-none focus:border-primary/40 transition-all cursor-pointer"
                 >
                   {SUBJECTS.map(group => (
-                    <optgroup key={group.group} label={group.group}>
+                    <optgroup key={group.group} label={group.group} className="bg-background">
                       {group.items.map(item => (
-                        <option key={item} value={item}>{item}</option>
+                        <option key={item} value={item} className="bg-background">{item}</option>
                       ))}
                     </optgroup>
                   ))}
@@ -104,18 +104,18 @@ export function GeneratorWindow({
               </div>
 
               <div>
-                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-secondary/60 mb-4 flex items-center gap-2">
-                  <Target className="w-3 h-3" /> Targeting Exams
-                </h3>
+                <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/20 mb-3 block flex items-center gap-2">
+                  <Target className="w-3 h-3" /> Target Exam
+                </label>
                 <div className="flex flex-wrap gap-2">
                   {EXAMS.map(exam => (
                     <button
                       key={exam.id}
                       onClick={() => handleToggleExam(exam.id)}
-                      className={`px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-tight transition-all duration-300 ${
+                      className={`px-3 py-2 rounded-lg text-[10px] font-bold uppercase border transition-all duration-300 ${
                         selectedExams.includes(exam.id)
-                        ? "bg-accent text-accent-foreground shadow-sm ring-2 ring-accent/20"
-                        : "bg-background text-secondary/50 hover:bg-secondary/5"
+                        ? "bg-accent/10 border-accent/40 text-accent"
+                        : "bg-white/[0.02] border-transparent text-white/20 hover:text-white/40"
                       }`}
                     >
                       {exam.name}
@@ -125,84 +125,93 @@ export function GeneratorWindow({
               </div>
 
               <div>
-                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-secondary/60 mb-4 flex items-center gap-2">
-                  <GraduationCap className="w-3 h-3" /> Scholastic Grade
-                </h3>
-                <div className="grid grid-cols-4 gap-2">
+                <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/20 mb-3 block flex items-center gap-2">
+                  <GraduationCap className="w-3 h-3" /> Grade Level
+                </label>
+                <div className="grid grid-cols-4 gap-1.5">
                   {CLASSES.map(cls => (
                     <button
                       key={cls}
                       onClick={() => setSelectedClass(cls)}
-                      className={`py-2 rounded-lg text-[10px] font-black transition-all ${
+                      className={`py-2.5 rounded-lg text-[10px] font-bold border transition-all ${
                         selectedClass === cls
-                        ? "bg-primary text-primary-foreground shadow-md ring-2 ring-primary/20"
-                        : "bg-background text-secondary/50 hover:bg-secondary/5"
+                        ? "bg-primary/10 border-primary/40 text-primary"
+                        : "bg-white/[0.02] border-transparent text-white/20"
                       }`}
                     >
                       {cls}
                     </button>
                   ))}
                 </div>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
+        </aside>
 
-        {/* Main Interaction Area */}
-        <div className="flex-1">
-          <div className="bg-card min-h-[480px] flex flex-col rounded-[3rem] shadow-terra-soft p-2">
-            <div className="flex-1 flex flex-col items-center justify-center p-14 relative bg-muted/20 rounded-[2.8rem]">
+        {/* Synthesis Core Interaction Area */}
+        <main className="flex-1">
+          <div className="synth-panel min-h-[520px] h-full flex flex-col p-2 bg-gradient-to-br from-white/[0.03] to-transparent">
+            <div className="flex-1 flex flex-col items-center justify-center p-12 relative overflow-hidden rounded-[2.5rem]">
+              
+              {/* Decorative Pulse Ring */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="w-[150%] h-[150%] bg-primary/[0.01] blur-[100px] rounded-full animate-pulse" />
+              </div>
+
               {isIdle ? (
                 activeMode === "scan" ? (
                   <label className="w-full cursor-pointer group">
                     <input type="file" className="hidden" accept="image/*,.pdf" onChange={handleFileChange} />
-                    <div className="flex flex-col items-center text-center space-y-10">
-                      <div className="w-28 h-28 rounded-[2.5rem] bg-white flex items-center justify-center group-hover:scale-105 group-hover:rotate-3 transition-all duration-700 shadow-terra-soft">
+                    <div className="flex flex-col items-center text-center space-y-8 relative z-10">
+                      <div className="w-32 h-32 rounded-[2.5rem] bg-card border border-white/5 flex items-center justify-center group-hover:scale-110 group-hover:border-primary/30 group-hover:shadow-[0_0_40px_rgba(0,255,242,0.1)] transition-all duration-700">
                         <Upload className="w-12 h-12 text-primary" />
                       </div>
-                      <div className="space-y-4">
-                        <h4 className="text-3xl font-serif font-bold text-primary">Ingest Research</h4>
-                        <p className="text-secondary opacity-70 max-w-xs mx-auto leading-relaxed font-medium">
-                          Upload handwritten notes or PDFs for organic knowledge synthesis.
+                      <div className="space-y-3">
+                        <h4 className="text-3xl font-bold text-white tracking-tight">Ingest Intelligence</h4>
+                        <p className="text-white/40 max-w-xs mx-auto text-sm font-medium leading-relaxed">
+                          Process visual or digital documents for deep knowledge extraction.
                         </p>
                       </div>
-                      <div className="px-10 py-3.5 rounded-2xl bg-primary text-primary-foreground text-sm font-bold shadow-lg group-hover:opacity-90 transition-all">
-                        Select Research Files
+                      <div className="synth-button-primary group-hover:brightness-125">
+                        Initialize Matrix Scan
                       </div>
                     </div>
                   </label>
                 ) : (
-                  <div className="w-full space-y-12">
-                    <div className="text-center space-y-4">
-                        <h4 className="text-3xl font-serif font-bold text-primary">Topic Synthesis</h4>
-                        <p className="text-secondary opacity-70 max-w-xs mx-auto font-medium">
-                            Define specific knowledge domains for deep extraction.
+                  <div className="w-full max-w-lg space-y-12 relative z-10">
+                    <div className="text-center space-y-3">
+                        <h4 className="text-3xl font-bold text-white tracking-tight">Conceptual Mining</h4>
+                        <p className="text-white/40 text-sm font-medium">
+                            Define knowledge vectors for targeted generation.
                         </p>
                     </div>
 
-                    <div className="max-w-md mx-auto space-y-8">
-                        <div className="relative">
+                    <div className="space-y-8">
+                        <div className="relative group">
                             <input 
                                 type="text"
                                 value={newTopic}
                                 onChange={(e) => setNewTopic(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && handleAddTopic()}
-                                placeholder="Enter a subject area..."
-                                className="w-full bg-white rounded-3xl py-5 px-8 pr-20 text-sm outline-none focus:ring-8 focus:ring-primary/5 transition-all shadow-sm"
+                                placeholder="Subject keyword or detailed concept..."
+                                className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-5 px-8 pr-20 text-sm font-medium text-white outline-none focus:border-primary/40 focus:bg-white/[0.05] transition-all"
                             />
                             <button 
                                 onClick={handleAddTopic}
-                                className="absolute right-3.5 top-1/2 -translate-y-1/2 w-12 h-12 bg-primary text-primary-foreground rounded-2xl flex items-center justify-center hover:scale-110 transition-transform shadow-lg"
+                                className="absolute right-3 top-2.5 w-10 h-10 bg-primary/20 text-primary border border-primary/20 rounded-xl flex items-center justify-center hover:bg-primary/30 transition-all"
                             >
-                                <Plus className="w-7 h-7" />
+                                <Plus className="w-6 h-6" />
                             </button>
                         </div>
 
-                        <div className="flex flex-wrap gap-3 justify-center min-h-[44px]">
+                        <div className="flex flex-wrap gap-2 justify-center min-h-[44px]">
                             {topics.map((t, i) => (
-                                <div key={i} className="flex items-center gap-3 bg-white px-5 py-2.5 rounded-2xl shadow-sm animate-terra-in">
-                                    <span className="text-sm font-bold text-secondary">{t}</span>
-                                    <button onClick={() => handleRemoveTopic(i)} className="text-destructive hover:scale-125 transition-transform">
+                                <div key={i} className="flex items-center gap-3 bg-white/[0.03] border border-white/10 pl-5 pr-3 py-2.5 rounded-xl animate-in zoom-in duration-300">
+                                    <span className="text-[13px] font-bold text-white/80">{t}</span>
+                                    <button 
+                                      onClick={() => handleRemoveTopic(i)} 
+                                      className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-white/5 text-white/20 hover:text-destructive transition-all"
+                                    >
                                         <X className="w-4 h-4" />
                                     </button>
                                 </div>
@@ -212,59 +221,75 @@ export function GeneratorWindow({
                         {topics.length > 0 && (
                             <button 
                                 onClick={() => onTopicScan(topics, selectedSubject, selectedExams, selectedClass)}
-                                className="w-full bg-primary text-primary-foreground py-5 rounded-3xl font-bold shadow-xl hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-3"
+                                className="w-full synth-button-primary py-5 flex items-center justify-center gap-3"
                             >
-                                <Send className="w-5 h-5" />
-                                <span>Begin Synthesis</span>
+                                <Zap className="w-4 h-4" />
+                                <span>Execute Synthesis</span>
                             </button>
                         )}
                     </div>
                   </div>
                 )
               ) : (
-                <div className="flex flex-col items-center text-center space-y-14 w-full max-w-sm">
+                <div className="flex flex-col items-center text-center space-y-12 w-full max-w-md relative z-10">
                   <div className="relative">
-                    <div className="w-36 h-36 rounded-[3rem] flex items-center justify-center overflow-hidden bg-white shadow-terra-soft">
+                    <div className="w-40 h-40 rounded-[3.5rem] bg-card border border-white/5 flex items-center justify-center relative overflow-hidden shadow-inner">
                         <div 
-                            className="absolute bottom-0 w-full bg-primary/10 transition-all duration-1000 ease-out"
+                            className="absolute bottom-0 w-full bg-primary/20 transition-all duration-1000 ease-out"
                             style={{ height: `${progress}%` }}
                         />
-                        <Cpu className={`w-14 h-14 text-primary relative z-10 ${status === 'processing' ? 'animate-pulse' : ''}`} />
+                        {/* Recursive Scan Line for Processing state */}
+                        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-primary/20 to-transparent h-24 animate-scan opacity-40" />
+                        
+                        <div className="flex flex-col items-center">
+                          <Boxes className="w-14 h-14 text-primary mb-2" />
+                          <span className="text-xl font-black text-primary tracking-tighter">{progress}%</span>
+                        </div>
                     </div>
                   </div>
                   
                   <div className="space-y-6 w-full">
-                    <h4 className="text-2xl font-serif font-bold text-primary capitalize">{String(status || 'processing').replace('_', ' ')}...</h4>
-                    <div className="w-full h-3 bg-white rounded-full overflow-hidden shadow-inner">
+                    <div className="flex flex-col items-center gap-2">
+                      <h4 className="text-2xl font-bold text-white tracking-tight uppercase">
+                        {String(status || 'processing').replace('_', ' ')}
+                      </h4>
+                      <p className="text-[10px] font-black tracking-[0.3em] text-primary animate-pulse">ALGORITHMIC EXTRACTION ACTIVE</p>
+                    </div>
+
+                    <div className="w-full h-1.5 bg-white/[0.03] rounded-full overflow-hidden">
                         <div 
-                            className="h-full bg-primary transition-all duration-700 ease-in-out" 
+                            className="h-full bg-primary shadow-[0_0_15px_rgba(0,255,242,0.8)] transition-all duration-700 ease-in-out" 
                             style={{ width: `${progress}%` }} 
                         />
                     </div>
-                    <p className="text-sm font-bold text-secondary/60">
-                        {progress}% Synthesis Complete
-                    </p>
                   </div>
 
-                  <div className="inline-flex items-center gap-3 px-8 py-4 bg-white rounded-3xl shadow-sm">
-                    <Loader2 className="w-5 h-5 text-accent animate-spin" />
-                    <span className="text-sm font-bold text-accent">Aligning Knowledge Paths</span>
+                  <div className="flex items-center gap-6 text-white/40">
+                    <div className="flex items-center gap-2">
+                      <Waves className="w-4 h-4 text-accent animate-pulse" />
+                      <span className="text-[10px] font-bold tracking-widest uppercase">Deep Search</span>
+                    </div>
+                    <div className="w-px h-3 bg-white/10" />
+                    <div className="flex items-center gap-2">
+                      <Binary className="w-4 h-4 text-primary animate-bounce" />
+                      <span className="text-[10px] font-bold tracking-widest uppercase">AI Synthesis</span>
+                    </div>
                   </div>
                 </div>
               )}
             </div>
           </div>
-        </div>
+        </main>
       </div>
 
-      {/* Trust Quote */}
-      <div className="flex flex-col items-center justify-center gap-4 opacity-50">
-        <div className="h-px w-24 bg-primary/10" />
-        <p className="text-xs font-serif italic text-secondary text-center max-w-xs">
-          "The aim of science is not to open the door to infinite wisdom, but to set a limit to infinite error."
+      {/* Trust Quote / Footer */}
+      <footer className="pt-12 flex flex-col items-center gap-4 opacity-30 group hover:opacity-100 transition-opacity">
+        <div className="h-px w-32 bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
+        <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-white/60">
+          Synthetic Knowledge Framework v2.4
         </p>
-        <div className="h-px w-24 bg-primary/10" />
       </div>
     </div>
   );
 }
+

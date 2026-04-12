@@ -1,5 +1,5 @@
 import React from "react";
-import { BookOpen, Search, Filter, ArrowRight, Clock, Hash, FileDown, FileText } from "lucide-react";
+import { BookOpen, Search, Filter, ArrowRight, Clock, Hash, FileDown, FileText, Database, Shield } from "lucide-react";
 
 interface LibraryWindowProps {
   history: any[];
@@ -16,103 +16,133 @@ export function LibraryWindow({
 }: LibraryWindowProps) {
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center p-24 space-y-6">
-        <div className="w-12 h-12 border-2 border-accent/20 border-t-accent rounded-full animate-spin" />
-        <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-primary opacity-40">Opening Archives...</span>
+      <div className="flex flex-col items-center justify-center p-24 space-y-8 min-h-[60vh]">
+        <div className="relative">
+          <div className="w-16 h-16 border-2 border-neon-cyan/5 border-t-neon-cyan rounded-full animate-spin" />
+          <Database className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 text-neon-cyan/50 animate-pulse" />
+        </div>
+        <div className="flex flex-col items-center gap-2">
+          <span className="text-[10px] font-bold uppercase tracking-[0.4em] text-neon-cyan animate-pulse">Accessing Vault</span>
+          <span className="text-[8px] uppercase tracking-widest text-white/30">Decrypting Archive Headers...</span>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-16">
-      <div className="flex flex-col md:flex-row justify-between items-end gap-10">
-        <div className="space-y-2">
-          <h2 className="text-5xl font-serif font-bold text-primary">Research Archives</h2>
-          <p className="text-secondary opacity-60 font-medium italic">A curated collection of your organic discoveries.</p>
+    <div className="max-w-6xl mx-auto space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-1000">
+      {/* Vault Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-8 pb-8 border-b border-white/5">
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
+             <div className="bg-neon-cyan/10 p-2 rounded-lg">
+                <Shield className="w-5 h-5 text-neon-cyan" />
+             </div>
+             <span className="text-[10px] uppercase font-bold tracking-[0.3em] text-neon-cyan/60">Secure Storage</span>
+          </div>
+          <div className="space-y-1">
+            <h2 className="text-4xl font-display font-black text-white tracking-tight uppercase italic">Archive Vault</h2>
+            <p className="text-white/40 font-medium text-sm">Long-term persistence for synthesized chemical research data.</p>
+          </div>
         </div>
 
-        <div className="flex items-center gap-4">
-            <div className="relative group">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary/40 group-focus-within:text-primary transition-colors" />
+        <div className="flex items-center gap-3 w-full md:w-auto">
+            <div className="relative group flex-grow md:flex-grow-0">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20 group-focus-within:text-neon-cyan transition-colors" />
                 <input 
                     type="text" 
-                    placeholder="Search discovery history..."
-                    className="bg-card rounded-2xl py-3.5 pl-12 pr-6 text-sm outline-none focus:ring-8 focus:ring-primary/5 transition-all w-72 shadow-sm"
+                    placeholder="Query archives..."
+                    className="bg-zinc-900/50 border border-white/5 rounded-xl py-3 pl-12 pr-6 text-sm text-white placeholder:text-white/20 outline-none focus:border-neon-cyan/30 focus:ring-4 focus:ring-neon-cyan/5 transition-all w-full md:w-72"
                 />
             </div>
-            <button className="p-3.5 rounded-2xl bg-card hover:bg-muted transition-all shadow-sm">
-                <Filter className="w-4 h-4 text-secondary" />
+            <button className="p-3.5 rounded-xl bg-zinc-900/50 border border-white/5 hover:border-white/10 text-white/40 hover:text-white transition-all shadow-xl">
+                <Filter className="w-4 h-4" />
             </button>
         </div>
       </div>
 
       {history.length === 0 ? (
-        <div className="bg-card p-24 rounded-[3rem] text-center space-y-10 shadow-terra-soft">
-            <div className="w-24 h-24 bg-muted/50 rounded-[2.5rem] flex items-center justify-center mx-auto">
-                <BookOpen className="w-10 h-10 text-primary opacity-40" />
+        <div className="synth-glass p-24 rounded-[2rem] text-center space-y-10 border border-white/5 bg-zinc-900/20">
+            <div className="w-24 h-24 bg-white/5 rounded-[2rem] flex items-center justify-center mx-auto border border-white/5 group overflow-hidden relative">
+                <div className="absolute inset-0 bg-neon-violet/10 animate-pulse" />
+                <Database className="w-10 h-10 text-white/20 group-hover:text-neon-violet transition-colors duration-700 relative z-10" />
             </div>
-            <div className="space-y-3">
-                <h4 className="text-2xl font-serif font-bold text-secondary">The Archives are Silent</h4>
-                <p className="text-secondary/50 max-w-xs mx-auto font-medium">Begin a new synthesis to populate your private research collection.</p>
+            <div className="space-y-4">
+                <h4 className="text-2xl font-bold text-white tracking-tight">VAULT IS EMPTY</h4>
+                <p className="text-white/30 max-w-xs mx-auto text-sm leading-relaxed">No research sequences found in the persistent buffer. Complete a synthesis to archive your first find.</p>
             </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {history.map((set) => (
-            <button
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {history.map((set, idx) => (
+            <div
               key={set.id}
               onClick={() => onSelect(set)}
-              className="bg-card p-8 text-left group hover:-translate-y-1.5 transition-all duration-700 rounded-[2.5rem] shadow-terra-soft relative overflow-hidden flex flex-col items-start"
+              className="group relative bg-[#0a0a0a] border border-white/5 hover:border-neon-cyan/30 rounded-2xl p-6 transition-all duration-500 cursor-pointer overflow-hidden"
+              style={{ animationDelay: `${idx * 50}ms` }}
             >
-              <div className="absolute top-0 right-0 p-8 opacity-0 group-hover:opacity-100 transition-all duration-500 translate-x-2 group-hover:translate-x-0">
-                <ArrowRight className="w-6 h-6 text-primary" />
-              </div>
+              {/* Highlight Effect */}
+              <div className="absolute top-0 right-0 w-32 h-32 bg-neon-cyan/5 blur-[60px] opacity-0 group-hover:opacity-100 transition-opacity" />
               
-              <div className="space-y-8 w-full">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-primary/5 rounded-2xl flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition-all duration-500">
-                        <Hash className="w-4 h-4" />
+              <div className="relative z-10 h-full flex flex-col">
+                <div className="flex items-center justify-between mb-8">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center group-hover:bg-neon-cyan/10 group-hover:text-neon-cyan transition-all duration-500 border border-white/5">
+                            <Hash className="w-4 h-4" />
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-[8px] uppercase tracking-widest font-bold text-white/30">Sector</span>
+                            <span className="text-[10px] font-mono font-bold text-white/60">#SAV_{set.id.slice(0, 6)}</span>
+                        </div>
                     </div>
-                    <span className="text-[10px] uppercase tracking-widest font-bold text-secondary/40">Ref: {set.id.slice(0, 8)}</span>
+                    <ArrowRight className="w-4 h-4 text-white/20 group-hover:text-neon-cyan transition-all translate-x-4 opacity-0 group-hover:translate-x-0 group-hover:opacity-100" />
                 </div>
 
-                <div className="space-y-2">
-                  <h3 className="text-xl font-serif font-bold text-secondary group-hover:text-primary transition-colors line-clamp-2 leading-snug">
-                    {set.title || set.topic || "Untitled Synthesis"}
+                <div className="space-y-3 flex-grow">
+                  <h3 className="text-lg font-bold text-white group-hover:text-neon-cyan transition-colors line-clamp-2 leading-tight tracking-tight">
+                    {set.title || set.topic || "UNKNOWN SEQUENCE"}
                   </h3>
-                  <p className="text-xs font-medium text-secondary/40 uppercase tracking-wider italic">Research Material</p>
+                  <div className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-neon-violet shadow-[0_0_8px_rgba(184,112,255,0.6)]" />
+                    <span className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] italic">Laboratory Archive</span>
+                  </div>
                 </div>
 
-                 <div className="flex items-center justify-between pt-8 w-full">
+                <div className="mt-8 pt-6 border-t border-white/5 flex items-center justify-between">
                     <div className="flex items-center gap-4">
                         <div className="flex items-center gap-2">
-                            <Clock className="w-3.5 h-3.5 text-secondary/30" />
-                            <span className="text-xs font-bold text-secondary/50">{new Date(set.timestamp?.toDate ? set.timestamp.toDate() : set.timestamp).toLocaleDateString()}</span>
+                            <Clock className="w-3.5 h-3.5 text-white/20" />
+                            <span className="text-[10px] font-bold text-white/40 uppercase tracking-tighter">
+                                {new Date(set.timestamp?.toDate ? set.timestamp.toDate() : set.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </span>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1">
                              <button 
                                 onClick={(e) => { e.stopPropagation(); onExport(set, 'pdf'); }}
-                                className="p-2 hover:bg-primary/5 rounded-lg text-primary transition-colors"
+                                className="p-2 hover:bg-white/5 rounded-lg text-white/40 hover:text-neon-cyan transition-colors"
+                                title="Export PDF"
                              >
                                 <FileDown className="w-4 h-4" />
                              </button>
                              <button 
                                 onClick={(e) => { e.stopPropagation(); onExport(set, 'docx'); }}
-                                className="p-2 hover:bg-primary/5 rounded-lg text-accent transition-colors"
+                                className="p-2 hover:bg-white/5 rounded-lg text-white/40 hover:text-neon-violet transition-colors"
+                                title="Export Word"
                              >
                                 <FileText className="w-4 h-4" />
                              </button>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2 px-4 py-2 bg-muted/50 rounded-xl">
-                        <span className="text-xs font-bold text-primary">{set.questions?.length || 0} Units</span>
+                    <div className="px-3 py-1.5 bg-white/5 rounded-lg border border-white/5">
+                        <span className="text-[10px] font-mono font-bold text-neon-cyan">{String(set.questions?.length || 0).padStart(2, '0')}</span>
                     </div>
                 </div>
               </div>
-            </button>
+            </div>
           ))}
         </div>
       )}
     </div>
   );
 }
+

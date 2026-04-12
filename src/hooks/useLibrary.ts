@@ -17,11 +17,22 @@ export function useLibrary(user: User | null, isAuthReady: boolean) {
     }
     const q = query(collection(db, `users/${user.uid}/history`), orderBy("timestamp", "desc"));
     return onSnapshot(q, (snap) => {
-      setHistory(snap.docs.map(d => ({
-        id: d.id,
-        ...d.data(),
-        questions: typeof d.data().questions === 'string' ? JSON.parse(d.data().questions) : d.data().questions
-      } as HistoryItem)));
+      setHistory(snap.docs.map(d => {
+        const data = d.data();
+        const parsedQuestions = (typeof data.questions === 'string' ? JSON.parse(data.questions) : data.questions) || [];
+        
+        // Map legacy 'question' -> 'text' for each question node
+        const normalizedQuestions = parsedQuestions.map((q: any) => ({
+          ...q,
+          text: q.text || q.question
+        }));
+
+        return {
+          id: d.id,
+          ...data,
+          questions: normalizedQuestions
+        } as HistoryItem;
+      }));
     });
   }, [user, isAuthReady]);
 

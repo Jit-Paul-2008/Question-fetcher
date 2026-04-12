@@ -28,9 +28,9 @@ export default function App() {
   const [activeSet, setActiveSet] = useState<any>(null);
 
   // Initialize modular logic
-  const { user, loading: authLoading, error: authError, credits, setCredits, login, register, googleLogin, logout } = useAuth();
+  const { user, loading: authLoading, error: authError, credits, setCredits, login, register, googleLogin, logout, refreshProfile } = useAuth();
   const { buyCredits } = usePayments(user, setCredits);
-  const { status, progress, scanFile, scanTopics, result } = useScanner(user, credits, setCredits);
+  const { status, progress, scanFile, scanTopics, result, reset: resetScanner } = useScanner(user, credits, setCredits);
   const { history, loading: historyLoading, refreshHistory } = useLibrary(user, !authLoading);
   const { myClassrooms, joinedClasses, isCroomsLoading, joinClassroom, createClassroom } = useClassrooms(user, !authLoading);
 
@@ -41,12 +41,14 @@ export default function App() {
 
   // Result handling
   useEffect(() => {
-    if (result) {
+    if (result && status === "success") {
       setActiveSet(result);
       setActiveTab("classrooms");
       refreshHistory();
+      // Also refresh profile to update credits from backend
+      if (refreshProfile) refreshProfile();
     }
-  }, [result]);
+  }, [result, status]);
 
   const toggleTheme = () => setTheme(prev => prev === "light" ? "dark" : "light");
 

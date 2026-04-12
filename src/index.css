@@ -1,107 +1,137 @@
-@import url('https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,200..900;1,7..72,200..900&family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&family=Alex+Brush&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Manrope:wght@200;300;400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --background: 45 40% 98%; /* Warm Cream #faf6f0 */
-  --foreground: 45 15% 15%; /* Deep Earthy Gray #2e3230 */
-  --card: 45 40% 99%;
-  --card-foreground: 45 15% 15%;
-  --popover: 45 40% 99%;
-  --popover-foreground: 45 15% 15%;
-  --primary: 138 25% 39%; /* Forest Green #4a7c59 */
-  --primary-foreground: 45 40% 98%;
-  --secondary: 45 10% 38%; /* Earthy Brownish Gray #6b6358 */
-  --secondary-foreground: 45 40% 98%;
-  --muted: 45 15% 94%;
-  --muted-foreground: 45 10% 45%;
-  --accent: 40 50% 60%; /* Terracotta/Amber #c4a66a */
-  --accent-foreground: 45 40% 98%;
-  --destructive: 0 58% 46%;
-  --destructive-foreground: 45 40% 98%;
-  --border: 45 10% 85%;
-  --input: 45 10% 85%;
-  --ring: 138 25% 39%;
-  --radius: 0.75rem; /* 12px rounding for Terra theme */
-}
-
-.dark {
-  /* Dark Terra: Deep Mossy Tones */
-  --background: 138 20% 6%; 
-  --foreground: 45 40% 98%;
-  --card: 138 20% 8%;
-  --card-foreground: 45 40% 98%;
-  --popover: 138 20% 8%;
-  --popover-foreground: 45 40% 98%;
-  --primary: 40 50% 60%; /* Accent becomes primary in dark mode */
-  --primary-foreground: 138 20% 6%;
-  --secondary: 138 15% 15%;
-  --secondary-foreground: 45 40% 98%;
-  --muted: 138 15% 15%;
-  --muted-foreground: 45 10% 60%;
-  --accent: 138 25% 39%;
-  --accent-foreground: 45 40% 98%;
-  --destructive: 0 62% 30%;
-  --destructive-foreground: 45 40% 98%;
-  --border: 138 15% 20%;
-  --input: 138 15% 20%;
-  --ring: 40 50% 60%;
+  /* Obsidian Base: Deepest Night */
+  --background: 0 0% 3%;
+  --foreground: 0 0% 98%;
+  
+  --card: 0 0% 5%;
+  --card-foreground: 0 0% 98%;
+  
+  --popover: 0 0% 5%;
+  --popover-foreground: 0 0% 98%;
+  
+  /* Neon Cyan: The Synthetic Energy */
+  --primary: 191 100% 50%;
+  --primary-foreground: 0 0% 3%;
+  
+  /* Tonal Surface: For borders and separations without lines */
+  --secondary: 0 0% 12%;
+  --secondary-foreground: 0 0% 98%;
+  
+  --muted: 0 0% 8%;
+  --muted-foreground: 0 0% 63%;
+  
+  /* Neon Violet: Strategic Accent */
+  --accent: 263 100% 70%;
+  --accent-foreground: 0 0% 98%;
+  
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 98%;
+  
+  --border: 0 0% 12%;
+  --input: 0 0% 12%;
+  --ring: 191 100% 50%;
+  
+  --radius: 1.5rem;
+  
+  /* Additional Tactical Tokens */
+  --glow-cyan: hsla(191, 100%, 50%, 0.5);
+  --glow-violet: hsla(263, 100%, 70%, 0.5);
 }
 
 @layer base {
+  * {
+    @apply border-border;
+  }
   body {
-    @apply bg-background text-foreground antialiased;
-    font-family: 'Nunito Sans', sans-serif;
+    @apply bg-background text-foreground antialiased selection:bg-primary/30 selection:text-white;
+    font-family: 'Manrope', sans-serif;
     background-image: 
-      radial-gradient(at 0% 0%, rgba(196, 166, 106, 0.05) 0px, transparent 50%),
-      radial-gradient(at 100% 100%, rgba(74, 124, 89, 0.05) 0px, transparent 50%);
+      radial-gradient(at 0% 0%, hsla(191, 100%, 50%, 0.05) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, hsla(263, 100%, 70%, 0.05) 0px, transparent 50%);
     background-attachment: fixed;
   }
   h1, h2, h3, h4, h5, h6 {
-    @apply tracking-tight font-medium;
-    font-family: 'Literata', serif;
+    @apply font-bold tracking-tight;
+    font-family: 'Space Grotesk', sans-serif;
   }
 }
 
 @layer utilities {
-  .terra-glass {
-    @apply bg-card/60 backdrop-blur-xl shadow-[0_4px_30px_rgba(0,0,0,0.03)];
+  .synth-glass {
+    @apply bg-card/40 backdrop-blur-2xl border border-white/5 shadow-[0_8px_32px_0_rgba(0,0,0,0.8)];
   }
-  .terra-button-primary {
-    @apply bg-primary text-primary-foreground px-8 py-3 rounded-2xl font-bold hover:opacity-90 transition-all shadow-lg shadow-primary/10;
+  
+  .synth-button-primary {
+    @apply bg-primary text-primary-foreground px-6 py-2.5 rounded-xl font-bold hover:brightness-110 active:scale-95 transition-all shadow-lg shadow-primary/20;
   }
-  .terra-button-secondary {
-    @apply bg-secondary/5 text-secondary px-8 py-3 rounded-2xl font-bold hover:bg-secondary/10 transition-all;
+  
+  .synth-button-secondary {
+    @apply bg-secondary text-foreground px-6 py-2.5 rounded-xl font-semibold hover:bg-secondary/80 active:scale-95 transition-all;
   }
-  .terra-card {
-    @apply bg-card p-10 rounded-[3rem] shadow-[0_20px_50px_rgba(0,0,0,0.02)];
+
+  .synth-panel {
+    @apply bg-card/60 rounded-3xl p-8 border border-white/5 ring-1 ring-white/[0.02];
   }
-  .terra-card-tonal {
-    @apply bg-muted/30 p-8 rounded-[2.5rem] transition-all;
+
+  .tonal-surface {
+    @apply bg-white/[0.03] hover:bg-white/[0.05] transition-colors rounded-2xl;
   }
-  .text-terra-gradient {
-    @apply bg-clip-text text-transparent bg-gradient-to-br from-primary to-accent font-black;
+
+  .text-neon-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent;
+  }
+
+  .bento-grid {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 1.5rem;
+  }
+
+  .glow-cyan {
+    box-shadow: 0 0 20px -5px var(--glow-cyan);
+  }
+
+  .hud-border {
+    position: relative;
+    border: 1px solid hsla(0, 0%, 100%, 0.05);
+  }
+
+  .hud-border::before {
+    content: '';
+    position: absolute;
+    top: -1px; left: 10%; right: 10%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--glow-cyan), transparent);
+  }
+
+  .grid-pattern {
+    background-image: radial-gradient(circle at 1px 1px, hsla(0, 0%, 100%, 0.05) 1px, transparent 0);
+    background-size: 24px 24px;
   }
 }
 
-/* Animations */
-@keyframes soft-fade-in {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.animate-terra-in {
-  animation: soft-fade-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
+/* Scrollbar: Tonal & Minimal */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
 }
 ::-webkit-scrollbar-track {
-  @apply bg-muted/50;
+  @apply bg-transparent;
 }
 ::-webkit-scrollbar-thumb {
-  @apply bg-primary/20 rounded-full hover:bg-primary/40 transition-colors;
+  @apply bg-white/10 rounded-full hover:bg-white/20 transition-colors;
+}
+
+@keyframes scan-line {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(1000%); }
+}
+
+.animate-scan {
+  animation: scan-line 4s linear infinite;
 }

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
-import { Loader2, Zap, LayoutPanelLeft, Share2, FlaskConical, Box } from "lucide-react";
+import { Loader2, Zap, Activity, Share2, Cpu, Box, Terminal, Database } from "lucide-react";
 
 interface GraphNode {
   id: string;
@@ -20,12 +20,12 @@ interface GraphData {
   links: GraphLink[];
 }
 
-const TERRA_COLORS: Record<string, string> = {
-  "Chemistry": "#c4a66a", // Terracotta
-  "Physics": "#4a7c59",    // Forest Green
-  "Biology": "#8b4513",    // Saddle Brown
-  "Maths": "#2d4a36",      // Deep Green
-  "General": "#8c7e6d"     // Greige
+const NEON_COLORS: Record<string, string> = {
+  "Chemistry": "#00fff2", // Neon Cyan
+  "Physics": "#b870ff",    // Neon Violet
+  "Biology": "#00ff88",    // Neon Green
+  "Maths": "#ff0088",      // Neon Pink
+  "General": "#ffffff"     // White
 };
 
 export function KnowledgeMapWindow() {
@@ -36,14 +36,13 @@ export function KnowledgeMapWindow() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fallback to mock data if API fails to ensure UI utility is visible
         const mockData = {
             nodes: [
-                { id: "1", topic: "Organic Synthesis", subject: "Chemistry" },
-                { id: "2", topic: "Quantum Mechanics", subject: "Physics" },
-                { id: "3", topic: "Cellular Mitosis", subject: "Biology" },
-                { id: "4", topic: "Calculus Limits", subject: "Maths" },
-                { id: "5", topic: "General Science", subject: "General" }
+                { id: "1", name: "Organic Synthesis", group: "Chemistry" },
+                { id: "2", name: "Quantum Mechanics", group: "Physics" },
+                { id: "3", name: "Cellular Mitosis", group: "Biology" },
+                { id: "4", name: "Calculus Limits", group: "Maths" },
+                { id: "5", name: "General Science", group: "General" }
             ],
             links: [
                 { source: "1", target: "5", value: 1 },
@@ -58,7 +57,7 @@ export function KnowledgeMapWindow() {
         
         const enhancedNodes = json.nodes.map((n: any) => ({
           ...n,
-          color: TERRA_COLORS[n.group] || TERRA_COLORS["General"]
+          color: NEON_COLORS[n.group] || NEON_COLORS["General"]
         }));
 
         setData({ nodes: enhancedNodes, links: json.links });
@@ -74,42 +73,51 @@ export function KnowledgeMapWindow() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-[600px] bg-card rounded-[3rem] shadow-terra-soft">
-        <Loader2 className="w-10 h-10 text-primary animate-spin mb-4" />
-        <p className="text-secondary/60 font-serif italic">Visualizing the knowledge tapestry...</p>
+      <div className="flex flex-col items-center justify-center h-[600px] synth-glass rounded-[3rem] border border-white/5 mx-auto max-w-7xl">
+        <div className="relative">
+            <Loader2 className="w-12 h-12 text-neon-cyan animate-spin mb-4" />
+            <div className="absolute inset-0 bg-neon-cyan/20 blur-xl rounded-full" />
+        </div>
+        <p className="text-white/40 text-[10px] font-black uppercase tracking-[0.5em] animate-pulse">Initializing Neural Link...</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-12 animate-terra-in">
-      <div className="flex flex-col xl:flex-row gap-10 items-start">
+    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-1000 max-w-7xl mx-auto">
+      <div className="flex flex-col xl:flex-row gap-8 items-stretch">
         <div className="w-full xl:w-[75%]">
-          <div className="bg-card shadow-terra-soft rounded-[3.5rem] overflow-hidden relative min-h-[700px]">
-            <div className="absolute top-10 left-10 z-10 space-y-2 pointer-events-none">
+          <div className="synth-glass rounded-[2.5rem] border border-white/5 overflow-hidden relative min-h-[750px] bg-zinc-900/10 shadow-2xl">
+            {/* Overlay UI */}
+            <div className="absolute top-10 left-10 z-20 space-y-2 pointer-events-none">
                 <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-primary/10 text-primary rounded-2xl flex items-center justify-center">
-                        <Box className="w-6 h-6" />
+                    <div className="w-12 h-12 bg-white/5 border border-white/10 text-white rounded-2xl flex items-center justify-center shadow-2xl group">
+                        <Box className="w-6 h-6 group-hover:text-neon-cyan transition-colors" />
                     </div>
                     <div>
-                        <h2 className="text-4xl font-serif font-bold text-primary">Knowledge Universe</h2>
-                        <p className="text-secondary/60 text-sm font-medium italic">Semantic relationships & cross-disciplinary overlaps</p>
+                        <h2 className="text-3xl font-black text-white italic tracking-tight uppercase">Knowledge Universe</h2>
+                        <div className="flex items-center gap-2">
+                             <div className="w-1.5 h-1.5 rounded-full bg-neon-cyan shadow-[0_0_8px_rgba(0,255,242,0.8)]" />
+                             <p className="text-white/30 text-[9px] font-black uppercase tracking-[0.2em]">Semantic_Neural_Network_v4.2</p>
+                        </div>
                     </div>
                 </div>
             </div>
             
-            <div className="w-full h-[700px] cursor-grab active:cursor-grabbing bg-muted/10">
+            <div className="w-full h-[750px] cursor-grab active:cursor-grabbing bg-[#050505]/50">
               <ForceGraph2D
                 ref={graphRef}
                 graphData={data}
                 nodeLabel="name"
                 nodeColor={n => (n as GraphNode).color || "#ccc"}
-                nodeVal={n => (n as any).value || 5}
-                nodeRelSize={4}
+                nodeVal={() => 5}
+                nodeRelSize={5}
                 linkWidth={1}
-                linkColor={() => "rgba(74, 124, 89, 0.05)"}
-                linkDirectionalParticles={1}
+                linkColor={() => "rgba(255, 255, 255, 0.03)"}
+                linkDirectionalParticles={2}
                 linkDirectionalParticleSpeed={0.005}
+                linkDirectionalParticleWidth={2}
+                linkDirectionalParticleColor={() => "rgba(0, 255, 242, 0.2)"}
                 backgroundColor="transparent"
                 cooldownTicks={100}
                 onNodeClick={(node: any) => {
@@ -122,53 +130,69 @@ export function KnowledgeMapWindow() {
             </div>
             
             {/* Legend */}
-            <div className="absolute bottom-10 left-10 flex flex-wrap gap-6 bg-white/80 backdrop-blur-md p-5 px-8 rounded-3xl z-10 shadow-sm">
-              {Object.entries(TERRA_COLORS).map(([sub, color]) => (
+            <div className="absolute bottom-10 left-10 right-10 flex flex-wrap gap-5 bg-black/40 backdrop-blur-xl p-6 px-10 rounded-2xl z-20 border border-white/5 shadow-2xl justify-center xl:justify-start">
+              {Object.entries(NEON_COLORS).map(([sub, color]) => (
                 <div key={sub} className="flex items-center gap-3">
-                  <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: color }} />
-                  <span className="text-[10px] font-bold text-secondary/70 uppercase tracking-widest">{sub}</span>
+                  <div className="w-2.5 h-2.5 rounded-full shadow-[0_0_10px_rgba(var(--color),0.5)]" style={{ backgroundColor: color }} />
+                  <span className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">{sub}</span>
                 </div>
               ))}
             </div>
           </div>
         </div>
 
-        <div className="w-full xl:w-[25%] space-y-8">
-          <div className="bg-card shadow-terra-soft rounded-[2.5rem] p-10 relative overflow-hidden">
-            <h3 className="text-xl font-serif font-bold mb-8 text-primary pb-4">Global Metrics</h3>
-            <div className="space-y-10">
+        <div className="w-full xl:w-[25%] flex flex-col gap-8">
+          <div className="synth-glass rounded-[2rem] border border-white/5 p-10 relative overflow-hidden bg-white/5 flex-grow group">
+             <div className="absolute top-0 right-0 w-32 h-32 bg-neon-cyan/5 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity" />
+            
+            <div className="flex items-center gap-3 mb-10 border-b border-white/5 pb-6">
+                <Activity className="w-4 h-4 text-neon-cyan" />
+                <h3 className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em]">Map Core Metrics</h3>
+            </div>
+
+            <div className="space-y-12">
               <div className="space-y-3">
-                <div className="flex items-center gap-3 opacity-60">
-                  <LayoutPanelLeft className="w-4 h-4 text-primary" />
-                  <span className="text-[10px] font-black uppercase tracking-widest text-secondary">Topics Mapped</span>
+                <div className="flex items-center gap-3 text-white/20">
+                  <Cpu className="w-4 h-4" />
+                  <span className="text-[9px] font-black uppercase tracking-widest">Active_Nodes</span>
                 </div>
-                <div className="text-6xl font-serif font-bold text-primary">{data.nodes.length}</div>
+                <div className="text-6xl font-black text-white italic tracking-tighter">{data.nodes.length}</div>
               </div>
 
               <div className="space-y-3">
-                <div className="flex items-center gap-3 opacity-60">
-                  <Share2 className="w-4 h-4 text-accent" />
-                  <span className="text-[10px] font-black uppercase tracking-widest text-secondary">Neural Links</span>
+                <div className="flex items-center gap-3 text-white/20">
+                  <Share2 className="w-4 h-4" />
+                  <span className="text-[9px] font-black uppercase tracking-widest">Logic_Links</span>
                 </div>
-                <div className="text-5xl font-serif font-bold text-primary">{data.links.length}</div>
+                <div className="text-5xl font-black text-white/60 italic tracking-tighter">{data.links.length}</div>
               </div>
             </div>
-            <p className="mt-10 text-[11px] text-secondary/50 font-medium italic leading-relaxed">
-              *Connections represent semantic nodes validated by the vector engine.
-            </p>
+
+            <div className="mt-auto pt-12 space-y-4">
+                 <div className="p-4 bg-black/40 rounded-xl border border-white/5 text-[9px] font-mono text-white/20 leading-relaxed uppercase tracking-wider italic">
+                    *Density nodes indicate semantic proximity within the vector space.
+                 </div>
+            </div>
           </div>
           
-          <div className="bg-primary p-10 rounded-[2.5rem] text-primary-foreground shadow-xl relative overflow-hidden group">
-            <div className="absolute -right-6 -bottom-6 opacity-10 group-hover:scale-110 transition-transform duration-700">
-               <FlaskConical className="w-40 h-40" />
+          <div className="relative group overflow-hidden rounded-[2rem] p-1 shadow-2xl">
+            <div className="absolute inset-0 bg-gradient-to-br from-neon-cyan via-neon-violet to-neon-cyan animate-spin-slow opacity-20" />
+            <div className="bg-black rounded-[23px] p-10 relative z-10 space-y-4 flex flex-col items-center text-center">
+                 <div className="p-4 bg-white/5 rounded-2xl border border-white/10 mb-2">
+                    <Database className="w-6 h-6 text-neon-cyan" />
+                 </div>
+                 <h4 className="text-[11px] font-black text-white uppercase tracking-[0.3em]">Cluster Sync</h4>
+                 <p className="text-[10px] text-white/40 font-bold leading-relaxed italic">
+                    Real-time synchronization with the decentralized knowledge repository.
+                 </p>
+                 <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden mt-4">
+                    <div className="w-[85%] h-full bg-neon-cyan shadow-[0_0_10px_rgba(0,255,242,0.8)]" />
+                 </div>
             </div>
-            <h3 className="font-black text-[10px] mb-4 uppercase tracking-widest opacity-80">Semantic Density</h3>
-            <p className="text-sm font-bold leading-relaxed relative z-10">
-              Nodes in close proximity indicate logical overlaps, optimizing synthesis speed and resource allocation.
-            </p>
           </div>
         </div>
       </div>
     </div>
   );
 }
+
