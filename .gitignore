@@ -6,3 +6,7 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Secrets and service account keys
+secrets/firebase-service-account.json
+gen-lang-client-0312116426-a1e42b97f0e8.json
