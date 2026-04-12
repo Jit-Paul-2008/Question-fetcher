@@ -8,7 +8,7 @@ import { toast } from "sonner";
 export function useLibrary(user: User | null, isAuthReady: boolean) {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [libraryBanks, setLibraryBanks] = useState<any[]>([]);
-  const [isLibraryLoading, setIsLibraryLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!isAuthReady || !user) {
@@ -26,7 +26,7 @@ export function useLibrary(user: User | null, isAuthReady: boolean) {
   }, [user, isAuthReady]);
 
   const fetchLibrary = async () => {
-    setIsLibraryLoading(true);
+    setLoading(true);
     try {
       const res = await fetch("/api/library");
       const data = await res.json();
@@ -34,9 +34,14 @@ export function useLibrary(user: User | null, isAuthReady: boolean) {
     } catch {
       toast.error("Failed to load library");
     } finally {
-      setIsLibraryLoading(false);
+      setLoading(false);
     }
   };
 
-  return { history, libraryBanks, isLibraryLoading, fetchLibrary };
+  const refreshHistory = async () => {
+    // Manual refresh of library banks if needed
+    await fetchLibrary();
+  };
+
+  return { history, libraryBanks, loading, fetchLibrary, refreshHistory };
 }

@@ -3,7 +3,6 @@ import { LogOut, Gem, Sun, Moon, FlaskConical } from "lucide-react";
 import { ActiveTab, Theme } from "../../lib/types";
 
 interface ShellProps {
-  children: React.ReactNode;
   activeTab: ActiveTab;
   setActiveTab: (tab: ActiveTab) => void;
   credits: number;
@@ -11,6 +10,7 @@ interface ShellProps {
   toggleTheme: () => void;
   onLogout: () => void;
   onOpenBuyModal: () => void;
+  children?: React.ReactNode;
 }
 
 export function Shell({

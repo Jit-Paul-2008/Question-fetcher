@@ -11,6 +11,7 @@ interface LibraryWindowProps {
 export function LibraryWindow({
   history,
   onSelect,
+  onExport,
   loading
 }: LibraryWindowProps) {
   if (loading) {

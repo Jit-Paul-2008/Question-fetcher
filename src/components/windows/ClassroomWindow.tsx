@@ -153,7 +153,7 @@ export function ClassroomWindow({
                               <span className="text-[11px] font-black uppercase tracking-[0.3em] text-primary">Intelligence Node {currentIndex + 1}</span>
                             </div>
                             <h4 className="text-3xl md:text-5xl font-serif font-black text-primary leading-[1.2] tracking-tight">
-                                {currentQuestion.text || currentQuestion.question}
+                                {currentQuestion.text}
                             </h4>
                         </div>
 

@@ -12,8 +12,28 @@ import { getFirestore } from "firebase-admin/firestore";
 import Razorpay from "razorpay";
 import mammoth from "mammoth";
 import { Pinecone } from "@pinecone-database/pinecone";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getDomainsForContext } from "./src/lib/search-taxonomy.js";
+
+// ─── Constants & Utilities ───────────────────────────────────────────────────
+const handleError = (res: any, error: any, context: string = "Server") => {
+  console.error(`[${context}:Error]`, error);
+  const message = error.message || "An unexpected error occurred";
+  const status = error.status || 500;
+  res.status(status).json({ error: message, context });
+};
+async function saveToUserHistory(uid: string, result: any, metadata: any) {
+  try {
+    const historyRef = db.collection(`users/${uid}/history`);
+    await historyRef.add({
+      ...result,
+      ...metadata,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    console.log(`[History:Saved] uid=${uid} topic=${result.topicDetected}`);
+  } catch (err) {
+    console.error(`[History:Error] uid=${uid}`, err);
+  }
+}
 
 // ─── Firebase Admin ───────────────────────────────────────────────────────────
 if (admin.apps.length === 0) {
@@ -39,15 +59,42 @@ const FREE_WELCOME_CREDITS = 3;
 // ─── Razorpay client (Use getRazorpay() instead) ──────────────────────────
 
 // ─── Pinecone & Embedding Init ──────────────────────────────────────────────
-const pc = new Pinecone({ apiKey: process.env.PINECONE_API_KEY || "" });
-const pcIndex = pc.index("chemscan");
-const genAIEmbed = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
-const embedModel = genAIEmbed.getGenerativeModel({ model: "embedding-001" });
+// ─── Pinecone & Embedding Init (Defensive for startup) ────────────────────────
+let pc: Pinecone | null = null;
+let pcIndex: any = null;
+
+function getPinecone() {
+  if (!pc) {
+    const apiKey = process.env.PINECONE_API_KEY;
+    if (!apiKey) {
+      console.warn("[Pinecone:Warn] PINECONE_API_KEY not found in environment.");
+      return null;
+    }
+    pc = new Pinecone({ apiKey });
+  }
+  return pc;
+}
+
+function getPineconeIndex() {
+  const client = getPinecone();
+  if (client && !pcIndex) {
+    pcIndex = client.index("chemscan");
+  }
+  return pcIndex;
+}
+
+const genAIEmbed = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "DUMMY_KEY" });
 
 async function getTopicEmbedding(text: string) {
   try {
-    const result = await withRetry(() => embedModel.embedContent(text)).catch(() => null);
-    return result ? result.embedding.values : null;
+    const response = await withRetry(() => 
+      genAIEmbed.models.embedContent({
+        model: "text-embedding-004",
+        contents: [{ parts: [{ text }] }],
+        config: { outputDimensionality: 768 }
+      })
+    );
+    return response.embeddings?.[0]?.values || null;
   } catch (err) {
     console.error("[Embedding:Error]", err);
     return null;
@@ -413,7 +460,8 @@ async function startServer() {
       // 1. Authenticate user
       uid = await verifyToken(req.headers.authorization);
     } catch (err: any) {
-      return res.status(401).json({ error: "Authentication required" });
+      console.warn(`[Auth:Fail] Method=${req.method} Path=${req.path} Reason=${err.message}`);
+      return res.status(401).json({ error: "Authentication required or session expired" });
     }
 
     try {
@@ -428,8 +476,9 @@ async function startServer() {
         });
       } catch (err: any) {
         if (err.message === "INSUFFICIENT_CREDITS") {
-          return res.status(402).json({ error: "Insufficient credits. Please purchase a pack." });
+          return res.status(402).json({ error: "Insufficient units. Please top up." });
         }
+        console.error(`[Credits:Transaction:Fail] uid=${uid}`, err);
         throw err;
       }
 
@@ -466,8 +515,9 @@ async function startServer() {
           // 2. Try Semantic Match (Pinecone)
           console.log(`[Cache:SEMANTIC_PULL] topic="${topic}"`);
           const vector = await getTopicEmbedding(topic || "");
-          if (vector) {
-            const queryResponse = await pcIndex.query({
+          const index = getPineconeIndex();
+          if (vector && index) {
+            const queryResponse = await index.query({
               vector,
               topK: 1,
               includeMetadata: true,
@@ -488,11 +538,23 @@ async function startServer() {
           const age = Date.now() - (cachedData.timestamp?.toMillis() || 0);
           const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
           if (age < SEVEN_DAYS) {
-            return res.json({
+            const scanResult = {
               topicDetected: cachedData.topicDetected,
               summary: cachedData.summary,
               keywords: cachedData.keywords || [],
               questions: cachedData.questions || [],
+            };
+            
+            // Save to user's personal history so it appears in their library
+            await saveToUserHistory(uid, scanResult, {
+              subject: subjectLabel,
+              exams: examList,
+              targetClass: targetClass || "12",
+              isCacheHit: true
+            });
+
+            return res.json({
+              ...scanResult,
               isPopular: true
             });
           }
@@ -504,7 +566,7 @@ async function startServer() {
       const tavilyKey = process.env.TAVILY_API_KEY;
       if (!geminiKey || !tavilyKey) {
         console.error("Missing API Keys: GEMINI_API_KEY or TAVILY_API_KEY not found in environment.");
-        return res.status(500).json({ error: "Server API keys not configured. Please check your .env file." });
+        return res.status(500).json({ error: "Server API keys not configured." });
       }
 
       const ai = new GoogleGenAI({ apiKey: geminiKey });
@@ -562,7 +624,7 @@ async function startServer() {
 
           const response = await withRetry(() =>
             ai.models.generateContent({
-              model: "gemini-3.1-flash-lite-preview",
+              model: "gemini-1.5-flash",
               contents: { parts: [{ text: topicPrompt }] },
               config: {
                 responseMimeType: "application/json",
@@ -600,7 +662,7 @@ async function startServer() {
 
           const analysisResponse = await withRetry(() =>
             ai.models.generateContent({
-              model: "gemini-3.1-flash-lite-preview",
+              model: "gemini-1.5-flash",
               contents: { parts: [...contentParts, { text: analysisPrompt }] },
               config: {
                 responseMimeType: "application/json",
@@ -685,7 +747,7 @@ async function startServer() {
 
       const structureResponse = await withRetry(() =>
         ai.models.generateContent({
-          model: "gemini-3.1-flash-lite-preview",
+          model: "gemini-1.5-flash",
           contents: structurePrompt,
           config: {
             maxOutputTokens: 4096,
@@ -742,6 +804,9 @@ async function startServer() {
             const normalizedText = (q.text || q.question || "").toLowerCase().replace(/\s+/g, " ").trim();
             if (!normalizedText || uniqueTexts.has(normalizedText)) return false;
             uniqueTexts.add(normalizedText);
+            // Enforce 'text' property for consistency
+            q.text = q.text || q.question;
+            delete q.question;
             return true;
           });
         }
@@ -751,12 +816,22 @@ async function startServer() {
       }
       console.log(`[Scan] Extracted ${structured.questions?.length || 0} unique questions`);
 
-      res.json({
+      const finalResult = {
         topicDetected: analysis.topicDetected || topic,
         summary: analysis.summary,
         keywords: analysis.keywords || [],
         questions: structured.questions || [],
+      };
+
+      // Save to user history on the backend for reliability
+      await saveToUserHistory(uid, finalResult, {
+        subject: subjectLabel,
+        exams: examList,
+        targetClass: targetClass || "12",
+        isCacheHit: false
       });
+
+      res.json(finalResult);
 
       // ─── SAVE TO CACHE (Hybrid Firestore + Pinecone) ─────────────────────
       if (structured.questions?.length > 0) {

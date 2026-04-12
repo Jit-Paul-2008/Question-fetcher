@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { User } from "firebase/auth";
 import { db } from "../lib/firebase";
 import { collection, addDoc } from "firebase/firestore";
@@ -10,6 +10,25 @@ export function useScanner(user: User | null, credits: number, setCredits?: (c: 
   const [status, setStatus] = useState<ScanStatus>("idle");
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<ScanResult | null>(null);
+  const progressTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (status === "processing") {
+      progressTimerRef.current = setInterval(() => {
+        setProgress(prev => {
+          if (prev >= 98) return 98;
+          // Unpredictable growth: smaller increments as it gets higher
+          const growth = prev < 80 ? (Math.random() * 2 + 0.5) : (Math.random() * 0.5);
+          return Math.min(98, prev + growth);
+        });
+      }, 800);
+    } else {
+      if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+    }
+    return () => {
+      if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+    };
+  }, [status]);
 
   const performScan = async (
     mode: "notes" | "topics", 
@@ -51,19 +70,11 @@ export function useScanner(user: User | null, credits: number, setCredits?: (c: 
           throw new Error("Invalid scan mode or data");
       }
 
+
       setResult(scanResult);
       setProgress(90);
       
       if (setCredits) setCredits(credits - 1);
-
-      await addDoc(collection(db, `users/${user.uid}/history`), {
-        ...scanResult,
-        subject,
-        exams,
-        targetClass,
-        questions: JSON.stringify(scanResult.questions),
-        timestamp: Date.now(),
-      });
 
       setStatus("success");
       setProgress(100);

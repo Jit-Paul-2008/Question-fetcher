@@ -31,8 +31,8 @@ export default function App() {
   const { user, loading: authLoading, error: authError, credits, setCredits, login, register, googleLogin, logout } = useAuth();
   const { buyCredits } = usePayments(user, setCredits);
   const { status, progress, scanFile, scanTopics, result } = useScanner(user, credits, setCredits);
-  const { history, loading: historyLoading, refreshHistory } = useLibrary(user);
-  const { activeSession, startSession, leaveSession } = useClassrooms(user);
+  const { history, loading: historyLoading, refreshHistory } = useLibrary(user, !authLoading);
+  const { myClassrooms, joinedClasses, isCroomsLoading, joinClassroom, createClassroom } = useClassrooms(user, !authLoading);
 
   // Theme Sync
   useEffect(() => {
@@ -153,8 +153,10 @@ export default function App() {
       {showBuyModal && (
         <BuyModal 
           onClose={() => setShowBuyModal(false)}
-          onSelectPlan={async (c, a) => {
-            await buyCredits(c, a);
+          onSelectPlan={async (credits) => {
+            // Map UI credits to backend pack IDs
+            const packId = credits <= 5 ? "starter" : credits <= 25 ? "value" : "study";
+            await buyCredits(packId);
             setShowBuyModal(false);
           }}
         />
