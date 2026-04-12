@@ -1,0 +1,30 @@
+name: Obsidian Sync Validation
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '.github/obsidian-sync/**'
+  push:
+    branches:
+      - 'obsidian-sync/**'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install deps
+        run: npm ci
+      - name: Validate obsidian notes
+        run: |
+          chmod +x scripts/validate_obsidian_notes.sh
+          ./scripts/validate_obsidian_notes.sh
+      - name: Run TypeScript lint
+        run: npm run lint
+      - name: Build
+        run: npm run build

@@ -1,0 +1,7 @@
+# CODEOWNERS - adjust owners as needed
+# Default owners inferred from git remote origin
+.github/prompts/ @Jit-Paul-2008
+.github/instructions/ @Jit-Paul-2008
+/.github/obsidian-sync/ @Jit-Paul-2008
+
+# If these GitHub usernames are incorrect, update this file with the correct owners or team handles.
