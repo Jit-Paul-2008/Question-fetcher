@@ -7,7 +7,6 @@ import cors from "cors";
 import crypto from "crypto";
 import { spawn } from 'child_process';
 import fs from 'fs/promises';
-import { createClient } from "redis";
 import { GoogleGenAI, Type } from "@google/genai";
 import { tavily } from "@tavily/core";
 import admin from "firebase-admin";
@@ -65,7 +64,6 @@ const CACHE_MIN_QUESTIONS = Math.max(1, parseInt(process.env.CACHE_MIN_QUESTIONS
 const CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 // Verifier mode: 'annotate' (default) or 'block'
 const VERIFIER_MODE = (process.env.VERIFIER_MODE || 'annotate').toLowerCase();
-const RATE_LIMIT_REDIS_URL = process.env.RATE_LIMIT_REDIS_URL || "";
 const RATE_LIMIT_FAIL_OPEN = (process.env.RATE_LIMIT_FAIL_OPEN || "true").toLowerCase() === "true";
 
 // ─── Razorpay client (Use getRazorpay() instead) ──────────────────────────
@@ -148,10 +146,7 @@ async function startServer() {
   const PORT = parseInt(process.env.PORT || "3000", 10);
 
   type RateLimitBucket = { count: number; resetAt: number };
-  type RedisClient = ReturnType<typeof createClient>;
   const rateLimitStore = new Map<string, RateLimitBucket>();
-  let redisClient: RedisClient | null = null;
-  let redisConnectPromise: Promise<RedisClient | null> | null = null;
 
   app.set("trust proxy", true);
 
@@ -185,38 +180,7 @@ async function startServer() {
     return req.socket.remoteAddress || "unknown";
   }
 
-  async function getRedisClient(): Promise<RedisClient | null> {
-    if (!RATE_LIMIT_REDIS_URL) return null;
-    if (redisClient?.isOpen) return redisClient;
-    if (redisConnectPromise) return redisConnectPromise;
-
-    const client = createClient({
-      url: RATE_LIMIT_REDIS_URL,
-      socket: {
-        connectTimeout: 2000,
-      },
-    });
-
-    client.on("error", (err) => {
-      console.error("[RateLimit:Redis:Error]", err?.message || err);
-    });
-
-    redisConnectPromise = client.connect()
-      .then(() => {
-        console.log("[RateLimit:Redis] Connected");
-        redisClient = client;
-        return client;
-      })
-      .catch((err) => {
-        console.error("[RateLimit:Redis:ConnectFailed]", err?.message || err);
-        return null;
-      })
-      .finally(() => {
-        redisConnectPromise = null;
-      });
-
-    return redisConnectPromise;
-  }
+  // No Redis: keep a simple in-memory rate limiter for single-instance deployments.
 
   function enforceInMemoryRateLimit(
     req: express.Request,
@@ -259,44 +223,7 @@ async function startServer() {
     maxRequests: number,
     windowMs: number
   ): Promise<boolean> {
-    const now = Date.now();
-    const bucketKey = `${key}:${getClientIp(req)}`;
-    const redis = await getRedisClient();
-
-    if (redis) {
-      try {
-        const redisKey = `ratelimit:${bucketKey}`;
-        const count = await redis.incr(redisKey);
-        if (count === 1) {
-          await redis.pExpire(redisKey, windowMs);
-        }
-
-        if (count > maxRequests) {
-          const ttlMs = await redis.pTTL(redisKey);
-          const retryAfterSec = Math.max(1, Math.ceil((ttlMs > 0 ? ttlMs : windowMs) / 1000));
-          res.setHeader("Retry-After", String(retryAfterSec));
-          res.status(429).json({ error: "Too many requests. Please retry shortly." });
-          return false;
-        }
-
-        return true;
-      } catch (err: any) {
-        console.error(`[RateLimit:Redis:RuntimeError] key=${key}`, err?.message || err);
-        if (RATE_LIMIT_FAIL_OPEN) {
-          console.warn("[RateLimit] Fail-open active. Allowing request despite Redis failure.");
-          return true;
-        }
-        return enforceInMemoryRateLimit(req, res, key, maxRequests, windowMs);
-      }
-    }
-
-    if (RATE_LIMIT_REDIS_URL) {
-      if (RATE_LIMIT_FAIL_OPEN) {
-        console.warn("[RateLimit] Redis not available. Fail-open active.");
-        return true;
-      }
-    }
-
+    // Single-instance in-memory limiter.
     return enforceInMemoryRateLimit(req, res, key, maxRequests, windowMs);
   }
 
@@ -998,12 +925,18 @@ async function startServer() {
       const queries = rawQueries.filter((q: string) => q && q.trim().length > 0);
       const includeDomains = getIncludeDomains(examList, subjectLabel, targetClass);
 
+      // If taxonomy returns a very small set of domains, avoid restricting the search
+      // so the discovery engine can surface broader sources. This prevents cases
+      // where only a handful of domains yield too few questions.
+      const shouldRestrictDomains = Array.isArray(includeDomains) && includeDomains.length >= 25;
+      if (!shouldRestrictDomains) console.warn(`[Scan] taxonomy returned ${includeDomains.length} domains — skipping domain restriction for broader search results.`);
+
       const allSearchResults = await Promise.all(
         queries.map((q: string) =>
           tv.search(q, {
             searchDepth: "advanced",
             maxResults: 15,
-            includeDomains: includeDomains
+            ...(shouldRestrictDomains ? { includeDomains } : {})
           })
             .catch(err => { console.error(`Tavily failed: ${q}`, err.message); return { results: [] }; })
         )

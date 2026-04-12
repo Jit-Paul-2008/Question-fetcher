@@ -199,5 +199,94 @@ export function getDomainsForContext(context: SearchContext): string[] {
   CLUSTERS.DEFAULT.forEach(d => domains.add(d));
 
   const result = Array.from(domains).slice(0, 60);
-  return result.length > 0 ? result : CLUSTERS.DEFAULT;
+  if (result.length >= 25) return result;
+
+  // When taxonomy resolution yields few domains, return a broader academic
+  // fallback set to ensure search coverage across many trusted sources.
+  const expandedFallback = [
+    // Major education platforms
+    "khanacademy.org",
+    "coursera.org",
+    "edx.org",
+    "udemy.com",
+    "swayam.gov.in",
+    "nptel.ac.in",
+    "mit.edu",
+    "ocw.mit.edu",
+    "stanford.edu",
+    "harvard.edu",
+    // National education boards & resources
+    "ncert.nic.in",
+    "cbse.gov.in",
+    "cbseacademic.nic.in",
+    "cisce.org",
+    // Popular Indian exam prep and academic hubs
+    "byjus.com",
+    "toppr.com",
+    "vedantu.com",
+    "careers360.com",
+    "testbook.com",
+    "embibe.com",
+    "unacademy.com",
+    "fiitjee.com",
+    "aakash.ac.in",
+    "allen.ac.in",
+    "resonance.ac.in",
+    "pw.live",
+    "neetprep.com",
+    "physicswallah.com",
+    "selfstudys.com",
+    "studiestoday.com",
+    "aglasem.com",
+    "meritnation.com",
+    // Reference & research
+    "wikipedia.org",
+    "britannica.com",
+    "researchgate.net",
+    "academia.edu",
+    "arxiv.org",
+    "jstor.org",
+    "springer.com",
+    "nature.com",
+    "sciencedirect.com",
+    "ieeexplore.ieee.org",
+    // Regional/local educational portals
+    "exametc.com",
+    "shaalaa.com",
+    "learncbse.in",
+    "magnetbrains.com",
+    "nextgurukul.in",
+    "learnnext.com",
+    "factmonster.com",
+    // Language/grammar resources
+    "grammarly.com",
+    "dictionary.cambridge.org",
+    "collinsdictionary.com",
+    // Sample papers / news / explainers
+    "jagranjosh.com",
+    "successcds.net",
+    "nationalgeographic.com",
+    "history.com",
+    // Misc education hubs and question banks
+    "samplepapers.in",
+    "entrance-exam.net",
+    "examsbook.com",
+    "careerorbits.com",
+    "askIITians.com",
+    "doubtnut.com",
+    "topperlearning.com",
+    "edurev.in",
+    "meritnation.com",
+    "accountancyknowledge.com",
+    "commerceatease.com",
+    "bengaliformula.com",
+    "hindikiduniya.com",
+    "banglashiskhardhara.com",
+    // Add default cluster at the end to preserve previous safety net
+    ...CLUSTERS.DEFAULT,
+  ];
+
+  // Merge domains with existing ones, de-duplicate, and return up to 200
+  const merged = Array.from(new Set([...Array.from(domains), ...expandedFallback]));
+  return merged.slice(0, 200);
 }
