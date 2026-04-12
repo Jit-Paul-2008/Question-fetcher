@@ -18,3 +18,11 @@ View your app in AI Studio: https://ai.studio/apps/037afd9e-7975-495a-b35d-27afa
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
 3. Run the app:
    `npm run dev`
+
+## Staging
+
+Staging (Cloud Run) example:
+
+Staging URL: https://chemscan-staging-49989755678.us-central1.run.app/
+
+Set `PUBLIC_APP_URL` in your service environment to this value when deploying.

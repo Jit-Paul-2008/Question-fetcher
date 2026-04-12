@@ -1272,27 +1272,9 @@ async function startServer() {
         questions: structured.questions || [],
       };
 
-      // Run in-process verification on the assistant reply (summary + question texts)
-      try {
-        const replyText = [finalResult.summary || '', ...(finalResult.questions || []).map((q: any) => q?.text || '')].join('\n\n');
-        const verification = await verifyTextInProcess(replyText);
-        // Annotate by default to avoid user-visible blocking. If VERIFIER_MODE=block, preserve previous blocking behavior.
-        if (!verification.ok) {
-          if (VERIFIER_MODE === 'block') {
-            // Refund 1 credit for the failed/blocked response
-            await profileRef.update({ credits: admin.firestore.FieldValue.increment(1) }).catch(() => { });
-            console.warn(`[Verifier:Blocked] uid=${uid} issues=${(verification.report?.unsupported || []).length}`);
-            return res.status(200).json({ blocked: true, reason: 'verification_failed', verification: verification.report });
-          }
-          // Annotate the final result instead of blocking
-          (finalResult as any).verification = verification.report;
-        } else {
-          (finalResult as any).verification = verification.report;
-        }
-      } catch (verErr) {
-        console.error('[Verifier] in-process verification error', verErr);
-        // On verifier failure, fail-open: do not block or modify returned result
-      }
+      // NOTE: automatic verification on assistant replies has been removed.
+      // The system will no longer block or annotate responses here.
+      // Verification is preserved only for gating Knowledge Map cache saves below.
 
       // Save to user history on the backend for reliability
       await saveToUserHistory(uid, finalResult, {
@@ -1306,53 +1288,73 @@ async function startServer() {
 
       // ─── SAVE TO CACHE (Hybrid Firestore + Pinecone) ─────────────────────
       if ((structured.questions?.length || 0) >= CACHE_MIN_QUESTIONS) {
-        // Save to Firestore (Anonymized)
-        db.collection("global_cache").doc(cacheKey).set({
-          topicDetected: analysis.topicDetected || topic,
-          summary: analysis.summary,
-          keywords: analysis.keywords || [],
-          questions: structured.questions,
-          subject: subjectLabel,
-          exams: examList,
-          timestamp: admin.firestore.FieldValue.serverTimestamp()
-        }).catch(err => console.error("[Cache:SaveError:Firestore]", err));
-
-        // Save keywords to discovery collection for the Knowledge Map
-        const keywords = analysis.keywords || [];
-        keywords.forEach((kw: string) => {
-          const kwId = kw.toLowerCase().replace(/\s+/g, "_");
-          db.collection("discovery").doc(kwId).set({
-            name: kw,
-            type: "keyword",
-            subject: subjectLabel,
-            lastSeen: admin.firestore.FieldValue.serverTimestamp()
-          }, { merge: true }).catch(() => { });
-
-          // Link keyword to this topic
-          db.collection("discovery").doc(`${kwId}_${cacheKey}`).set({
-            source: kwId,
-            target: cacheKey,
-            type: "link",
-            timestamp: admin.firestore.FieldValue.serverTimestamp()
-          }).catch(() => { });
-        });
-
-        // Save to Pinecone
-        (async () => {
-          const vector = await getTopicEmbedding(analysis.topicDetected || topic);
-          if (vector) {
-            await pcIndex.upsert({
-              records: [{
-                id: cacheKey,
-                values: vector,
-                metadata: {
-                  topicDetected: analysis.topicDetected || topic,
-                  subject: subjectLabel
-                }
-              }]
-            });
+        // Gate cache/discovery/pinecone saves behind a verifier to ensure only
+        // high-quality reports enter the Knowledge Map.
+        let passVerification = true;
+        try {
+          const replyText = [finalResult.summary || '', ...(finalResult.questions || []).map((q: any) => q?.text || '')].join('\n\n');
+          const verification = await verifyTextInProcess(replyText);
+          passVerification = verification.ok;
+          if (!passVerification) {
+            console.warn(`[Verifier:CacheSkip] uid=${uid} cacheKey=${cacheKey} issues=${(verification.report?.unsupported || []).length}`);
           }
-        })().catch(err => console.error("[Cache:SaveError:Pinecone]", err));
+        } catch (verErr) {
+          // On verifier failure, treat as pass to avoid accidental data loss.
+          console.error('[Verifier] cache verification error, allowing save', verErr);
+          passVerification = true;
+        }
+
+        if (!passVerification) {
+          console.log(`[Cache] Skipping Knowledge Map save for key=${cacheKey} due to verification failure.`);
+        } else {
+          // Save to Firestore (Anonymized)
+          db.collection("global_cache").doc(cacheKey).set({
+            topicDetected: analysis.topicDetected || topic,
+            summary: analysis.summary,
+            keywords: analysis.keywords || [],
+            questions: structured.questions,
+            subject: subjectLabel,
+            exams: examList,
+            timestamp: admin.firestore.FieldValue.serverTimestamp()
+          }).catch(err => console.error("[Cache:SaveError:Firestore]", err));
+
+          // Save keywords to discovery collection for the Knowledge Map
+          const keywords = analysis.keywords || [];
+          keywords.forEach((kw: string) => {
+            const kwId = kw.toLowerCase().replace(/\s+/g, "_");
+            db.collection("discovery").doc(kwId).set({
+              name: kw,
+              type: "keyword",
+              subject: subjectLabel,
+              lastSeen: admin.firestore.FieldValue.serverTimestamp()
+            }, { merge: true }).catch(() => { });
+
+            // Link keyword to this topic
+            db.collection("discovery").doc(`${kwId}_${cacheKey}`).set({
+              source: kwId,
+              target: cacheKey,
+              type: "link",
+              timestamp: admin.firestore.FieldValue.serverTimestamp()
+            }).catch(() => { });
+          });
+
+          // Save to Pinecone
+          (async () => {
+            const vector = await getTopicEmbedding(analysis.topicDetected || topic);
+            if (vector) {
+              await pcIndex.upsert({
+                records: [{
+                  id: cacheKey,
+                  values: vector,
+                  metadata: {
+                    topicDetected: analysis.topicDetected || topic,
+                    subject: subjectLabel
+                  }
+                }]
+              });
+            }
+          })().catch(err => console.error("[Cache:SaveError:Pinecone]", err));
+        }
       } else {
         console.log(`[Cache:SKIP_LOW_QUALITY] key=${cacheKey} questions=${structured.questions?.length || 0}`);
       }

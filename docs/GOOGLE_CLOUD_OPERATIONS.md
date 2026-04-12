@@ -21,6 +21,15 @@ RATE_LIMIT_FAIL_OPEN=true
 PORT=3000
 ```
 
+## Test/Staging App URL
+Set the public URL for the staging instance so tools and integrations can reference it easily.
+
+```
+PUBLIC_APP_URL=https://chemscan-staging-49989755678.us-central1.run.app/
+```
+
+If you deploy multiple environments, set `PUBLIC_APP_URL` appropriately in each service's environment.
+
 ## Console Checklist
 1. Firebase Console
 - Authentication providers enabled (Google + Email/Password).
