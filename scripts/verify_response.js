@@ -19,8 +19,8 @@ async function readInput() {
 }
 
 function splitSentences(text) {
-  const m = text.match(/[^.!?]+[.!?]*/g);
-  return m ? m : [text];
+  // Split on punctuation followed by whitespace and a capital/digit/quote (avoid splitting decimals like 2.5)
+  return text.split(/(?<=[.!?])\s+(?=[A-Z0-9"'\u00C0-\u017F])/u);
 }
 
 function retrieveFor(query) {
@@ -41,9 +41,17 @@ function retrieveFor(query) {
   if (!text) { console.error('empty input'); process.exit(2); }
   const sentences = splitSentences(text).map(s => s.trim()).filter(Boolean);
   const report = { total_sentences: sentences.length, supported: [], unsupported: [], details: [] };
+  const STOPWORDS = new Set(['the','is','in','at','of','and','a','an','to','for','on','by','with','that','this','it','as','be','are','was','were','from','or','which','but','has','have']);
+  function buildQuery(s){
+    // normalize: remove punctuation except hyphens and digits/letters, lower-case, split, remove stopwords
+    const cleaned = s.replace(/[^\p{L}\p{N}\-\s]/gu,' ').toLowerCase();
+    const toks = cleaned.split(/\s+/).filter(t=>t && !STOPWORDS.has(t) && t.length>1);
+    return toks.join(' ');
+  }
+
   for (const s of sentences) {
-    // limit query size
-    const q = s.length > 300 ? s.slice(0, 300) : s;
+    const q = buildQuery(s);
+    if(!q){ report.unsupported.push(s); continue; }
     const r = retrieveFor(q);
     if (r.error) {
       report.details.push({ sentence: s, error: r.error, stdout: r.stdout, stderr: r.stderr });
