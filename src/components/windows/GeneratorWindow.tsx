@@ -85,7 +85,7 @@ export function GeneratorWindow({
 
             <div className="space-y-8">
               <div>
-                <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/20 mb-3 block flex items-center gap-2">
+                <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/20 mb-3 flex items-center gap-2">
                   <Binary className="w-3 h-3" /> Academic Stream
                 </label>
                 <select 
@@ -104,7 +104,7 @@ export function GeneratorWindow({
               </div>
 
               <div>
-                <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/20 mb-3 block flex items-center gap-2">
+                <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/20 mb-3 flex items-center gap-2">
                   <Target className="w-3 h-3" /> Target Exam
                 </label>
                 <div className="flex flex-wrap gap-2">
@@ -125,7 +125,7 @@ export function GeneratorWindow({
               </div>
 
               <div>
-                <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/20 mb-3 block flex items-center gap-2">
+                <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/20 mb-3 flex items-center gap-2">
                   <GraduationCap className="w-3 h-3" /> Grade Level
                 </label>
                 <div className="grid grid-cols-4 gap-1.5">

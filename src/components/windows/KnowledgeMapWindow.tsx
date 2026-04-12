@@ -35,37 +35,56 @@ export function KnowledgeMapWindow() {
 
   useEffect(() => {
     const fetchData = async () => {
-      try {
-        const mockData = {
-            nodes: [
-                { id: "1", name: "Organic Synthesis", group: "Chemistry" },
-                { id: "2", name: "Quantum Mechanics", group: "Physics" },
-                { id: "3", name: "Cellular Mitosis", group: "Biology" },
-                { id: "4", name: "Calculus Limits", group: "Maths" },
-                { id: "5", name: "General Science", group: "General" }
-            ],
-            links: [
-                { source: "1", target: "5", value: 1 },
-                { source: "2", target: "5", value: 1 },
-                { source: "3", target: "5", value: 1 },
-                { source: "4", target: "5", value: 1 }
-            ]
-        };
+      let retries = 3;
+      let lastError: Error | null = null;
 
-        const res = await fetch('/api/graph-data').catch(() => null);
-        const json = res ? await res.json() : mockData;
-        
-        const enhancedNodes = json.nodes.map((n: any) => ({
-          ...n,
-          color: NEON_COLORS[n.group] || NEON_COLORS["General"]
-        }));
+      while (retries > 0) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout
+          
+          const res = await fetch('/api/graph-data', { signal: controller.signal });
+          clearTimeout(timeoutId);
+          
+          if (!res.ok) {
+            throw new Error(`Graph API returned ${res.status}: ${res.statusText}`);
+          }
+          
+          const json = await res.json();
+          
+          if (!json.nodes || !json.links) {
+            throw new Error('Invalid graph data structure: missing nodes or links');
+          }
 
-        setData({ nodes: enhancedNodes, links: json.links });
-      } catch (err) {
-        console.error("Failed to fetch graph data", err);
-      } finally {
-        setLoading(false);
+          // Validation passed, proceed
+          const enhancedNodes = json.nodes.map((n: any) => ({
+            ...n,
+            color: NEON_COLORS[n.group] || NEON_COLORS["General"]
+          }));
+
+          setData({ nodes: enhancedNodes, links: json.links });
+          
+          // Log successful fetch for observability
+          console.debug('[KnowledgeMap] Graph data fetched successfully', { nodeCount: json.nodes.length, linkCount: json.links.length });
+          setLoading(false);
+          return;
+        } catch (err) {
+          lastError = err instanceof Error ? err : new Error(String(err));
+          retries--;
+          console.warn(`[KnowledgeMap] Fetch attempt failed (${4 - retries}/3):`, lastError.message);
+          
+          if (retries > 0) {
+            await new Promise(r => setTimeout(r, 1000 * (4 - retries))); // Exponential backoff
+          }
+        }
       }
+
+      // All retries exhausted, show error state
+      console.error('[KnowledgeMap] Failed to load graph data after 3 retries:', lastError);
+        
+      // Set error state (optional: render error UI with retry button)
+      setData({ nodes: [], links: [] });
+      setLoading(false);
     };
 
     fetchData();

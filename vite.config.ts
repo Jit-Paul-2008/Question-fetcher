@@ -20,6 +20,18 @@ export default defineConfig(({mode}) => {
         '@': path.resolve(process.cwd(), '.'),
       },
     },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            // Separate large dependencies into their own chunks
+            'vendor-pdf': ['jspdf', 'html2canvas'],
+            'vendor-graph': ['react-force-graph-2d'],
+          },
+        },
+      },
+      chunkSizeWarningLimit: 1000, // Raise from 500KB to 1MB for info logging
+    },
     server: {
       port: 3000,
       host: '0.0.0.0',
