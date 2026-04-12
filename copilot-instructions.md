@@ -29,3 +29,8 @@
 - Verify payment signatures server-side.
 - Sanitize and validate user inputs on all API routes.
 - Do not expose server keys in client code.
+
+## Context Persistence
+- Treat `.github/instructions/context-persistence.instructions.md` as the hard policy layer for this project.
+- Treat `.github/prompts/context-bootstrap.prompt.md` as the reusable new-chat bootstrap and memory template.
+- Preserve the staging-first, quality-first defaults from those files unless the user explicitly changes scope.

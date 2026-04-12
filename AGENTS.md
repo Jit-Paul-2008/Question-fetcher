@@ -31,3 +31,8 @@ This repository follows a multi-pass execution model for every non-trivial featu
 - Findings first.
 - Concrete file-level change summary.
 - Risks and follow-up checks.
+
+## Context Persistence
+- Use `.github/instructions/context-persistence.instructions.md` as the always-on policy layer.
+- Use `.github/prompts/context-bootstrap.prompt.md` to seed new chats with the canonical project context.
+- When major decisions change, update the prompt and policy together so they stay synchronized.
