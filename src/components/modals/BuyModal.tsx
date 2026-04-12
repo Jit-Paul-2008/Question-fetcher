@@ -11,9 +11,9 @@ export function BuyModal({
   onSelectPlan
 }: BuyModalProps) {
   const plans = [
-    { credits: 5, price: 99, label: "Seed Access", icon: Zap, color: "text-primary", popular: false },
-    { credits: 25, price: 399, label: "Cultivator Pro", icon: Gem, color: "text-accent", popular: true },
-    { credits: 100, price: 1499, label: "Harvest Master", icon: Award, color: "text-primary", popular: false },
+    { credits: 5, price: 49, label: "Starter Pack", icon: Zap, color: "text-primary", popular: false },
+    { credits: 15, price: 129, label: "Value Pack", icon: Gem, color: "text-accent", popular: true },
+    { credits: 35, price: 279, label: "Study Pack", icon: Award, color: "text-primary", popular: false },
   ];
 
   return (

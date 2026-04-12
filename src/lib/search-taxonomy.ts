@@ -18,7 +18,16 @@ const CLUSTERS = {
     "careers360.com",
     "unacademy.com",
     "aakash.ac.in",
-    "doubtnut.com"
+    "doubtnut.com",
+    "embibe.com",
+    "vedantu.com",
+    "resonance.ac.in",
+    "fiitjee.com",
+    "motion.ac.in",
+    "careerorbits.com",
+    "neetprep.com",
+    "askiitians.com",
+    "examside.com"
   ],
   SCIENCE_ACADEMIC: [
     "learncbse.in",
@@ -27,7 +36,14 @@ const CLUSTERS = {
     "ncert.nic.in",
     "shaalaa.com",
     "vedantu.com",
-    "toppr.com"
+    "toppr.com",
+    "studiestoday.com",
+    "aglasem.com",
+    "physicswallah.com",
+    "mycbseguide.com",
+    "cbseacademic.nic.in",
+    "testbook.com",
+    "jagranjosh.com"
   ],
   ICSE_ISC_ACADEMIC: [
     "cisce.org",
@@ -43,7 +59,12 @@ const CLUSTERS = {
     "shaalaa.com",
     "tsmg.in",
     "caat.in",
-    "byjus.com"
+    "byjus.com",
+    "meritnation.com",
+    "accountancyknowledge.com",
+    "commerceatease.com",
+    "vedantu.com",
+    "studiestoday.com"
   ],
   HUMANITIES_ACADEMIC: [
     "shaalaa.com",
@@ -51,7 +72,11 @@ const CLUSTERS = {
     "successcds.net",
     "aglasem.com",
     "history.com",
-    "nationalgeographic.com"
+    "nationalgeographic.com",
+    "thoughtco.com",
+    "loksabhadocs.nic.in",
+    "ncert.nic.in",
+    "unacademy.com"
   ],
   LANGUAGES: [
     "sanskritfromhome.org",
@@ -61,7 +86,11 @@ const CLUSTERS = {
     "successcds.net",
     "examveda.com",
     "bengaliformula.com",
-    "banglashiskhardhara.com"
+    "banglashiskhardhara.com",
+    "hindikiduniya.com",
+    "grammarly.com",
+    "dictionary.cambridge.org",
+    "collinsdictionary.com"
   ],
   REGIONAL_WBSCHE: [
     "wbchse.nic.in",
@@ -69,7 +98,10 @@ const CLUSTERS = {
     "wbresults.nic.in",
     "selfstudys.com",
     "shaalaa.com",
-    "bengaliformula.com"
+    "bengaliformula.com",
+    "wbbse.wb.gov.in",
+    "edudigm.in",
+    "careerpower.in"
   ],
   GRADUATION_ADVANCED: [
     "nptel.ac.in",
@@ -79,7 +111,12 @@ const CLUSTERS = {
     "sciencedirect.com",
     "ignou.ac.in",
     "jstor.org",
-    "academia.edu"
+    "academia.edu",
+    "arxiv.org",
+    "springer.com",
+    "nature.com",
+    "wiley.com",
+    "ieeexplore.ieee.org"
   ],
   MIDDLE_SCHOOL_ACADEMIC: [
     "khanacademy.org",
@@ -100,7 +137,11 @@ const CLUSTERS = {
     "shaalaa.com",
     "careers360.com",
     "selfstudys.com",
-    "pw.live"
+    "pw.live",
+    "studiestoday.com",
+    "aglasem.com",
+    "testbook.com",
+    "embibe.com"
   ]
 };
 
@@ -157,6 +198,6 @@ export function getDomainsForContext(context: SearchContext): string[] {
   // 5. Final Defaults
   CLUSTERS.DEFAULT.forEach(d => domains.add(d));
 
-  const result = Array.from(domains).slice(0, 15);
+  const result = Array.from(domains).slice(0, 60);
   return result.length > 0 ? result : CLUSTERS.DEFAULT;
 }

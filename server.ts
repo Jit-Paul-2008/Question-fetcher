@@ -56,6 +56,11 @@ type PackId = keyof typeof CREDIT_PACKS;
 
 const FREE_WELCOME_CREDITS = 3;
 
+const GEMINI_GENERATION_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const GEMINI_EMBEDDING_MODEL = process.env.GEMINI_EMBEDDING_MODEL || "";
+const CACHE_MIN_QUESTIONS = Math.max(1, parseInt(process.env.CACHE_MIN_QUESTIONS || "10", 10));
+const CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
 // ─── Razorpay client (Use getRazorpay() instead) ──────────────────────────
 
 // ─── Pinecone & Embedding Init ──────────────────────────────────────────────
@@ -86,10 +91,11 @@ function getPineconeIndex() {
 const genAIEmbed = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "DUMMY_KEY" });
 
 async function getTopicEmbedding(text: string) {
+  if (!GEMINI_EMBEDDING_MODEL) return null;
   try {
     const response = await withRetry(() => 
       genAIEmbed.models.embedContent({
-        model: "text-embedding-004",
+        model: GEMINI_EMBEDDING_MODEL,
         contents: [{ parts: [{ text }] }],
         config: { outputDimensionality: 768 }
       })
@@ -520,6 +526,7 @@ async function startServer() {
 
       // ─── SEMANTIC CACHE CHECK (Hybrid Pinecone + Firestore) ──────────────
       let cachedData: any = null;
+      let cachedDocId: string | null = null;
       const isTopicOnly = imageList.length === 0;
       const cacheKey = getCacheKey(subjectLabel, topic || "", examList);
 
@@ -530,6 +537,7 @@ async function startServer() {
         if (cacheDoc.exists) {
           console.log(`[Cache:EXACT_HIT] key=${cacheKey}`);
           cachedData = cacheDoc.data();
+          cachedDocId = cacheKey;
         } else {
           // 2. Try Semantic Match (Pinecone)
           console.log(`[Cache:SEMANTIC_PULL] topic="${topic}"`);
@@ -548,15 +556,22 @@ async function startServer() {
               if (semanticDoc.exists) {
                 console.log(`[Cache:SEMANTIC_HIT] score=${bestMatch.score.toFixed(3)} topicDetected="${bestMatch.metadata?.topicDetected}"`);
                 cachedData = semanticDoc.data();
+                cachedDocId = bestMatch.id;
               }
             }
           }
         }
 
         if (cachedData) {
+          const cachedQuestions = Array.isArray(cachedData.questions) ? cachedData.questions.length : 0;
           const age = Date.now() - (cachedData.timestamp?.toMillis() || 0);
-          const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
-          if (age < SEVEN_DAYS) {
+
+          if (cachedQuestions < CACHE_MIN_QUESTIONS) {
+            console.warn(`[Cache:DISCARD_LOW_QUALITY] id=${cachedDocId || cacheKey} questions=${cachedQuestions}`);
+            if (cachedDocId) {
+              db.collection("global_cache").doc(cachedDocId).delete().catch(() => { });
+            }
+          } else if (age < CACHE_MAX_AGE_MS) {
             const scanResult = {
               topicDetected: cachedData.topicDetected,
               summary: cachedData.summary,
@@ -576,6 +591,8 @@ async function startServer() {
               ...scanResult,
               isPopular: true
             });
+          } else {
+            console.log(`[Cache:STALE] id=${cachedDocId || cacheKey} ageMs=${age}`);
           }
         }
       }
@@ -643,7 +660,7 @@ async function startServer() {
 
           const response = await withRetry(() =>
             ai.models.generateContent({
-              model: "gemini-1.5-flash",
+              model: GEMINI_GENERATION_MODEL,
               contents: { parts: [{ text: topicPrompt }] },
               config: {
                 responseMimeType: "application/json",
@@ -681,7 +698,7 @@ async function startServer() {
 
           const analysisResponse = await withRetry(() =>
             ai.models.generateContent({
-              model: "gemini-1.5-flash",
+              model: GEMINI_GENERATION_MODEL,
               contents: { parts: [...contentParts, { text: analysisPrompt }] },
               config: {
                 responseMimeType: "application/json",
@@ -732,15 +749,24 @@ async function startServer() {
 
       const seenUrls = new Set<string>();
       const combined: string[] = [];
+      let totalChars = 0;
+      const MAX_SOURCES_FOR_STRUCTURING = 20;
+      const MAX_COMBINED_CHARS = 24000;
       for (const sr of allSearchResults) {
         for (const r of (sr.results || [])) {
           if (!seenUrls.has(r.url)) {
             seenUrls.add(r.url);
             // Trim to 2500 chars — enough to capture full questions + options from most sources
             const snippet = (r.content || "").slice(0, 2500).trim();
-            if (snippet) combined.push(`[Source: ${r.url}]\n${snippet}`);
+            if (!snippet) continue;
+            const sourceBlock = `[Source: ${r.url}]\n${snippet}`;
+            if (combined.length >= MAX_SOURCES_FOR_STRUCTURING) break;
+            if (totalChars + sourceBlock.length > MAX_COMBINED_CHARS) break;
+            combined.push(sourceBlock);
+            totalChars += sourceBlock.length;
           }
         }
+        if (combined.length >= MAX_SOURCES_FOR_STRUCTURING || totalChars >= MAX_COMBINED_CHARS) break;
       }
       console.log(`[Scan] ${combined.length} unique sources found`);
 
@@ -766,10 +792,10 @@ async function startServer() {
 
       const structureResponse = await withRetry(() =>
         ai.models.generateContent({
-          model: "gemini-1.5-flash",
+          model: GEMINI_GENERATION_MODEL,
           contents: structurePrompt,
           config: {
-            maxOutputTokens: 4096,
+            maxOutputTokens: 8192,
             temperature: 0.1,
             responseMimeType: "application/json",
             responseSchema: {
@@ -842,11 +868,140 @@ async function startServer() {
           structured.questions = [];
         }
       } catch (err: any) {
-        console.error("[Scan:StructuringError]", err, "Raw:", structuredText);
-        await profileRef.update({ credits: admin.firestore.FieldValue.increment(1) }).catch(() => { });
-        return res.status(500).json({ error: "AI structuring format error. Credits refunded. Please try again." });
+        console.warn("[Scan:StructuringError] Initial parse failed, attempting repair", err?.message || err);
+        try {
+          const repairPrompt = [
+            "You are a JSON repair utility.",
+            "Fix the malformed JSON below and return valid JSON only.",
+            "Required shape: { questions: [{ text, options[4], answer, source, year, type, targetExam, topic }] }",
+            "Do not add markdown or explanations.",
+            "Malformed JSON:",
+            structuredText.slice(0, 25000),
+          ].join("\n");
+
+          const repaired = await withRetry(() =>
+            ai.models.generateContent({
+              model: GEMINI_GENERATION_MODEL,
+              contents: repairPrompt,
+              config: {
+                maxOutputTokens: 8192,
+                temperature: 0,
+                responseMimeType: "application/json",
+                responseSchema: {
+                  type: Type.OBJECT,
+                  properties: {
+                    questions: {
+                      type: Type.ARRAY,
+                      items: {
+                        type: Type.OBJECT,
+                        properties: {
+                          text: { type: Type.STRING },
+                          options: { type: Type.ARRAY, items: { type: Type.STRING } },
+                          answer: { type: Type.STRING },
+                          source: { type: Type.STRING },
+                          year: { type: Type.STRING },
+                          type: { type: Type.STRING },
+                          targetExam: { type: Type.STRING },
+                          topic: { type: Type.STRING },
+                        },
+                        required: ["text", "options", "answer", "source", "year", "type", "targetExam", "topic"],
+                      },
+                    },
+                  },
+                  required: ["questions"],
+                },
+              },
+            })
+          );
+
+          structured = JSON.parse(repaired.text || "{}");
+          if (!Array.isArray(structured.questions)) structured.questions = [];
+        } catch (repairErr: any) {
+          console.error("[Scan:StructuringError] Repair failed", repairErr, "Raw:", structuredText);
+          await profileRef.update({ credits: admin.firestore.FieldValue.increment(1) }).catch(() => { });
+          return res.status(500).json({ error: "AI structuring format error. Credits refunded. Please try again." });
+        }
       }
       console.log(`[Scan] Extracted ${structured.questions?.length || 0} unique questions`);
+
+      // Ensure a practical minimum question set for user experience.
+      const MIN_QUESTIONS = 12;
+      if ((structured.questions?.length || 0) < MIN_QUESTIONS) {
+        const missingCount = MIN_QUESTIONS - (structured.questions?.length || 0);
+        const existingQuestionTexts = (structured.questions || [])
+          .map((q: any) => q?.text)
+          .filter((t: any) => typeof t === "string")
+          .slice(0, 20);
+
+        const topUpPrompt = [
+          `Generate ${missingCount + 4} additional unique ${subjectLabel} questions for topic: \"${analysis.topicDetected || topic}\".`,
+          "Rules:",
+          "- Return JSON only in the required schema.",
+          "- Exactly 4 options per question.",
+          "- Provide answer, source text (no URL), year, type, targetExam, topic.",
+          "- Do not repeat any existing questions listed below.",
+          `Existing questions to avoid:\n${existingQuestionTexts.join("\n") || "None"}`,
+        ].join("\n");
+
+        try {
+          const topUpResponse = await withRetry(() =>
+            ai.models.generateContent({
+              model: GEMINI_GENERATION_MODEL,
+              contents: topUpPrompt,
+              config: {
+                maxOutputTokens: 4096,
+                temperature: 0.2,
+                responseMimeType: "application/json",
+                responseSchema: {
+                  type: Type.OBJECT,
+                  properties: {
+                    questions: {
+                      type: Type.ARRAY,
+                      items: {
+                        type: Type.OBJECT,
+                        properties: {
+                          text: { type: Type.STRING },
+                          options: { type: Type.ARRAY, items: { type: Type.STRING } },
+                          answer: { type: Type.STRING },
+                          source: { type: Type.STRING },
+                          year: { type: Type.STRING },
+                          type: { type: Type.STRING },
+                          targetExam: { type: Type.STRING },
+                          topic: { type: Type.STRING },
+                        },
+                        required: ["text", "options", "answer", "source", "year", "type", "targetExam", "topic"],
+                      },
+                    },
+                  },
+                  required: ["questions"],
+                },
+              },
+            })
+          );
+
+          const parsedTopUp = JSON.parse(topUpResponse.text || "{}") as any;
+          const topUpQuestions = Array.isArray(parsedTopUp.questions) ? parsedTopUp.questions : [];
+
+          const dedupeSet = new Set(
+            (structured.questions || [])
+              .map((q: any) => (q?.text || "").toLowerCase().replace(/\s+/g, " ").trim())
+              .filter(Boolean)
+          );
+
+          for (const q of topUpQuestions) {
+            const rawText = q?.text || q?.question || "";
+            const norm = typeof rawText === "string" ? rawText.toLowerCase().replace(/\s+/g, " ").trim() : "";
+            if (!norm || dedupeSet.has(norm)) continue;
+            q.text = rawText;
+            delete q.question;
+            dedupeSet.add(norm);
+            structured.questions.push(q);
+            if (structured.questions.length >= MIN_QUESTIONS) break;
+          }
+        } catch (topUpErr) {
+          console.warn("[Scan:TopUp] Could not top-up questions", topUpErr);
+        }
+      }
 
       const finalResult = {
         topicDetected: analysis.topicDetected || topic,
@@ -866,7 +1021,7 @@ async function startServer() {
       res.json(finalResult);
 
       // ─── SAVE TO CACHE (Hybrid Firestore + Pinecone) ─────────────────────
-      if (structured.questions?.length > 0) {
+      if ((structured.questions?.length || 0) >= CACHE_MIN_QUESTIONS) {
         // Save to Firestore (Anonymized)
         db.collection("global_cache").doc(cacheKey).set({
           topicDetected: analysis.topicDetected || topic,
@@ -914,6 +1069,8 @@ async function startServer() {
             });
           }
         })().catch(err => console.error("[Cache:SaveError:Pinecone]", err));
+      } else {
+        console.log(`[Cache:SKIP_LOW_QUALITY] key=${cacheKey} questions=${structured.questions?.length || 0}`);
       }
 
     } catch (error: any) {

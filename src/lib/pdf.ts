@@ -7,6 +7,18 @@ export async function generateQuestionsPDF(
   subject: string = "Subject",
   options: ReportRenderOptions = { includeAnswers: true, brandLabel: "Question Fetcher" }
 ) {
+  const sanitizePdfText = (value: unknown): string => {
+    const text = typeof value === "string" ? value : String(value ?? "");
+    return text
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, " ")
+      .replace(/[“”]/g, '"')
+      .replace(/[‘’]/g, "'")
+      .replace(/[–—]/g, "-")
+      .replace(/…/g, "...")
+      .replace(/\s+/g, " ")
+      .trim();
+  };
+
   const { jsPDF } = await import("jspdf");
   if (!jsPDF) {
     console.error("jsPDF is not loaded correctly");
@@ -52,7 +64,7 @@ export async function generateQuestionsPDF(
 
     // Question Text
     doc.setFont("helvetica", "normal");
-    const splitText = doc.splitTextToSize(q.text, pageWidth - 40);
+    const splitText = doc.splitTextToSize(sanitizePdfText(q.text), pageWidth - 40);
     doc.text(splitText, 20, y);
     y += (splitText.length * 7);
 
@@ -60,8 +72,10 @@ export async function generateQuestionsPDF(
     doc.setFontSize(10);
     q.options.forEach((opt, optIdx) => {
       const char = String.fromCharCode(65 + optIdx);
-      doc.text(`${char}. ${opt}`, 25, y);
-      y += 6;
+      const line = `${char}. ${sanitizePdfText(opt)}`;
+      const optionLines = doc.splitTextToSize(line, pageWidth - 45);
+      doc.text(optionLines, 25, y);
+      y += (optionLines.length * 6);
     });
     y += 2;
 
@@ -69,7 +83,7 @@ export async function generateQuestionsPDF(
     if (options.includeAnswers) {
       doc.setFont("helvetica", "bold");
       doc.setTextColor(0, 128, 0);
-      doc.text(`Answer: ${q.answer}`, 20, y);
+      doc.text(`Answer: ${sanitizePdfText(q.answer)}`, 20, y);
       y += 7;
     } else {
       doc.setFont("helvetica", "italic");
@@ -82,7 +96,7 @@ export async function generateQuestionsPDF(
     doc.setFontSize(9);
     doc.setFont("helvetica", "italic");
     doc.setTextColor(120, 120, 120);
-    doc.text(`Source: ${q.source} (${q.year})`, 20, y);
+    doc.text(`Source: ${sanitizePdfText(q.source)} (${sanitizePdfText(q.year)})`, 20, y);
     y += 15;
   });
 
