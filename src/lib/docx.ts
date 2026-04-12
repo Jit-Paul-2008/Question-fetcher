@@ -90,7 +90,7 @@ export async function generateQuestionsDocx(
               new TextRun({ text: q.answer, bold: true, size: 20, font: "Calibri", color: "16A34A" }),
             ]
           : [
-              new TextRun({ text: "Answer: Hidden", italic: true, size: 18, font: "Calibri", color: "888888" }),
+              new TextRun({ text: "Answer: Hidden", italics: true, size: 18, font: "Calibri", color: "888888" }),
             ],
         spacing: { before: 120, after: 60 },
       })

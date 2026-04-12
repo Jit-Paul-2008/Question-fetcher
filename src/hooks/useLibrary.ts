@@ -1,13 +1,31 @@
 import { useState, useEffect } from "react";
 import { User } from "firebase/auth";
 import { db } from "@/src/lib/firebase";
-import { collection, query, orderBy, onSnapshot, where } from "firebase/firestore";
+import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
 import { HistoryItem } from "../lib/types";
-import { toast } from "sonner";
+
+function normalizeHistoryItem(doc: any): HistoryItem {
+  const data = doc.data ? doc.data() : doc;
+  const parsedQuestions = (typeof data.questions === "string" ? JSON.parse(data.questions) : data.questions) || [];
+
+  const normalizedQuestions = parsedQuestions.map((question: any) => ({
+    ...question,
+    text: question.text || question.question,
+  }));
+
+  return {
+    id: doc.id,
+    ...data,
+    questions: normalizedQuestions,
+    reportSettings: data.reportSettings || { includeAnswers: true, brandLabel: "Question Fetcher" },
+  } as HistoryItem;
+}
 
 export function useLibrary(user: User | null, isAuthReady: boolean) {
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [communityReports, setCommunityReports] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [communityLoading, setCommunityLoading] = useState(false);
 
   useEffect(() => {
     if (!isAuthReady || !user) {
@@ -16,28 +34,26 @@ export function useLibrary(user: User | null, isAuthReady: boolean) {
     }
     const q = query(collection(db, `users/${user.uid}/history`), orderBy("timestamp", "desc"));
     return onSnapshot(q, (snap) => {
-      setHistory(snap.docs.map(d => {
-        const data = d.data();
-        const parsedQuestions = (typeof data.questions === 'string' ? JSON.parse(data.questions) : data.questions) || [];
-        
-        // Map legacy 'question' -> 'text' for each question node
-        const normalizedQuestions = parsedQuestions.map((q: any) => ({
-          ...q,
-          text: q.text || q.question
-        }));
-
-        return {
-          id: d.id,
-          ...data,
-          questions: normalizedQuestions
-        } as HistoryItem;
-      }));
+      setHistory(snap.docs.map(normalizeHistoryItem));
     });
   }, [user, isAuthReady]);
 
+  const refreshCommunityReports = async () => {
+    setCommunityLoading(true);
+    try {
+      const res = await fetch("/api/community-library");
+      if (!res.ok) throw new Error("Failed to load community reports");
+      const data = await res.json();
+      setCommunityReports((data.banks || []).map(normalizeHistoryItem));
+    } catch (error) {
+      console.error("Community library refresh error:", error);
+      setCommunityReports([]);
+    } finally {
+      setCommunityLoading(false);
+    }
+  };
+
   const refreshHistory = async () => {
-    // Firestore realtime listener already syncs automatically
-    // This method is kept for manual refresh if needed
     if (!user) return;
     setLoading(true);
     try {
@@ -47,8 +63,7 @@ export function useLibrary(user: User | null, isAuthReady: boolean) {
       });
       if (!res.ok) throw new Error("Failed to refresh");
       const data = await res.json();
-      // Update history from server response
-      setHistory(data.banks || []);
+      setHistory((data.banks || []).map(normalizeHistoryItem));
       console.log(`[Library:Refreshed] Synced ${data.banks?.length || 0} items`);
     } catch (err) {
       console.error("Library refresh error:", err);
@@ -57,5 +72,9 @@ export function useLibrary(user: User | null, isAuthReady: boolean) {
     }
   };
 
-  return { history, loading, refreshHistory };
+  useEffect(() => {
+    refreshCommunityReports();
+  }, []);
+
+  return { history, communityReports, loading, communityLoading, refreshHistory, refreshCommunityReports };
 }

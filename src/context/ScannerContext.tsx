@@ -28,7 +28,7 @@ interface ScannerContextType {
 
 const ScannerContext = createContext<ScannerContextType | undefined>(undefined);
 
-export function ScannerProvider({ children }: { children: ReactNode }) {
+export function ScannerProvider({ children }: { children?: ReactNode }) {
   const [status, setStatus] = useState<ScanStatus>('idle');
   const [progress, setProgress] = useState(0);
   const [progressMsg, setProgressMsg] = useState('System Idle');
@@ -74,7 +74,7 @@ export function ScannerProvider({ children }: { children: ReactNode }) {
         reset,
       }}
     >
-      {children}
+      {children ?? null}
     </ScannerContext.Provider>
   );
 }

@@ -1,20 +1,30 @@
-import React from "react";
-import { BookOpen, Search, Filter, ArrowRight, Clock, Hash, FileDown, FileText, Database, Shield } from "lucide-react";
+import React, { useState } from "react";
+import { Search, Filter, ArrowRight, Clock, Hash, FileDown, FileText, Database, Shield, Globe, UserRound } from "lucide-react";
 
 interface LibraryWindowProps {
   history: any[];
+  communityReports: any[];
   onSelect: (set: any) => void;
   onExport: (set: any, type: 'pdf' | 'docx') => void;
   loading: boolean;
+  communityLoading: boolean;
 }
 
 export function LibraryWindow({
   history,
+  communityReports,
   onSelect,
   onExport,
-  loading
+  loading,
+  communityLoading
 }: LibraryWindowProps) {
-  if (loading) {
+  const [view, setView] = useState<"personal" | "community">("personal");
+  const sets = view === "personal" ? history : communityReports;
+  const isLoading = view === "personal" ? loading : communityLoading;
+  const personalCount = history.length;
+  const communityCount = communityReports.length;
+
+  if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center p-24 space-y-8 min-h-[60vh]">
         <div className="relative">
@@ -44,6 +54,17 @@ export function LibraryWindow({
             <h2 className="text-4xl font-display font-black text-white tracking-tight uppercase italic">Archive Vault</h2>
             <p className="text-white/40 font-medium text-sm">Long-term persistence for synthesized chemical research data.</p>
           </div>
+          <div className="flex flex-wrap gap-2 pt-1">
+            <div className="px-3 py-1 rounded-full bg-white/5 border border-white/5 text-[10px] font-black uppercase tracking-[0.2em] text-white/50">
+              Personal {personalCount.toString().padStart(2, "0")}
+            </div>
+            <div className="px-3 py-1 rounded-full bg-white/5 border border-white/5 text-[10px] font-black uppercase tracking-[0.2em] text-white/50">
+              Community {communityCount.toString().padStart(2, "0")}
+            </div>
+            <div className="px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-[10px] font-black uppercase tracking-[0.2em] text-primary">
+              {view === "personal" ? "Private Archive" : "Published Reports"}
+            </div>
+          </div>
         </div>
 
         <div className="flex items-center gap-3 w-full md:w-auto">
@@ -51,7 +72,7 @@ export function LibraryWindow({
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20 group-focus-within:text-neon-cyan transition-colors" />
                 <input 
                     type="text" 
-                    placeholder="Query archives..."
+                    placeholder={view === "personal" ? "Query personal archive..." : "Search community reports..."}
                     className="bg-zinc-900/50 border border-white/5 rounded-xl py-3 pl-12 pr-6 text-sm text-white placeholder:text-white/20 outline-none focus:border-neon-cyan/30 focus:ring-4 focus:ring-neon-cyan/5 transition-all w-full md:w-72"
                 />
             </div>
@@ -61,20 +82,44 @@ export function LibraryWindow({
         </div>
       </div>
 
-      {history.length === 0 ? (
+      <div className="flex items-center gap-2 p-1 bg-white/5 rounded-2xl w-fit border border-white/5">
+        <button
+          onClick={() => setView("personal")}
+          className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.25em] flex items-center gap-2 transition-all ${view === "personal" ? "bg-primary text-primary-foreground" : "text-white/50 hover:text-white hover:bg-white/5"}`}
+        >
+          <UserRound className="w-4 h-4" />
+          Personal Archive
+        </button>
+        <button
+          onClick={() => setView("community")}
+          className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.25em] flex items-center gap-2 transition-all ${view === "community" ? "bg-primary text-primary-foreground" : "text-white/50 hover:text-white hover:bg-white/5"}`}
+        >
+          <Globe className="w-4 h-4" />
+          Community Library
+        </button>
+      </div>
+
+      {sets.length === 0 ? (
         <div className="synth-glass p-24 rounded-[2rem] text-center space-y-10 border border-white/5 bg-zinc-900/20">
             <div className="w-24 h-24 bg-white/5 rounded-[2rem] flex items-center justify-center mx-auto border border-white/5 group overflow-hidden relative">
                 <div className="absolute inset-0 bg-neon-violet/10 animate-pulse" />
                 <Database className="w-10 h-10 text-white/20 group-hover:text-neon-violet transition-colors duration-700 relative z-10" />
             </div>
             <div className="space-y-4">
-                <h4 className="text-2xl font-bold text-white tracking-tight">VAULT IS EMPTY</h4>
-                <p className="text-white/30 max-w-xs mx-auto text-sm leading-relaxed">No research sequences found in the persistent buffer. Complete a synthesis to archive your first find.</p>
+                <h4 className="text-2xl font-bold text-white tracking-tight">{view === "personal" ? "VAULT IS EMPTY" : "NO COMMUNITY REPORTS"}</h4>
+                <p className="text-white/30 max-w-xs mx-auto text-sm leading-relaxed">
+                  {view === "personal"
+                    ? "No research sequences found in the persistent buffer. Complete a synthesis to archive your first find."
+                    : "Nothing has been published to the community library yet."}
+                </p>
+            </div>
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/5 text-[10px] font-black uppercase tracking-[0.25em] text-white/40">
+              {view === "personal" ? "Scan results will appear here" : "Published from the Publish button in report view"}
             </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {history.map((set, idx) => (
+          {sets.map((set, idx) => (
             <div
               key={set.id}
               onClick={() => onSelect(set)}
@@ -91,7 +136,7 @@ export function LibraryWindow({
                             <Hash className="w-4 h-4" />
                         </div>
                         <div className="flex flex-col">
-                            <span className="text-[8px] uppercase tracking-widest font-bold text-white/30">Sector</span>
+                      <span className="text-[8px] uppercase tracking-widest font-bold text-white/30">{view === "personal" ? "Sector" : "Community"}</span>
                             <span className="text-[10px] font-mono font-bold text-white/60">#SAV_{set.id.slice(0, 6)}</span>
                         </div>
                     </div>
@@ -104,7 +149,9 @@ export function LibraryWindow({
                   </h3>
                   <div className="flex items-center gap-2">
                     <span className="w-1.5 h-1.5 rounded-full bg-neon-violet shadow-[0_0_8px_rgba(184,112,255,0.6)]" />
-                    <span className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] italic">Laboratory Archive</span>
+                    <span className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] italic">
+                      {view === "personal" ? "Laboratory Archive" : set.authorName || "Community Report"}
+                    </span>
                   </div>
                 </div>
 
@@ -137,6 +184,11 @@ export function LibraryWindow({
                         <span className="text-[10px] font-mono font-bold text-neon-cyan">{String(set.questions?.length || 0).padStart(2, '0')}</span>
                     </div>
                 </div>
+                {view === "community" && (
+                  <div className="mt-4 text-[10px] uppercase tracking-[0.2em] text-white/25 font-bold">
+                    Published by {set.authorName || "Student"}
+                  </div>
+                )}
               </div>
             </div>
           ))}

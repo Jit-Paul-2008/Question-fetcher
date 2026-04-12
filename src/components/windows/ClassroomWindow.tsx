@@ -92,6 +92,14 @@ export function ClassroomWindow({
                 {reportSettings.includeAnswers ? "Answer key included" : "Question-only report"}
               </span>
             </div>
+            <div className="flex flex-wrap gap-2 pt-2">
+              <div className="px-3 py-1 rounded-full bg-white/5 border border-white/5 text-[10px] font-black uppercase tracking-[0.2em] text-white/50">
+                {reportSettings.brandLabel || "Question Fetcher"}
+              </div>
+              <div className="px-3 py-1 rounded-full bg-white/5 border border-white/5 text-[10px] font-black uppercase tracking-[0.2em] text-white/50">
+                {questions.length.toString().padStart(2, "0")} Questions
+              </div>
+            </div>
           </div>
         </div>
 

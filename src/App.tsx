@@ -37,7 +37,7 @@ export default function App() {
   const { user, loading: authLoading, error: authError, credits, setCredits, login, register, googleLogin, logout, refreshProfile } = useAuth();
   const { buyCredits } = usePayments(user, setCredits, refreshProfile);
   const { status, progress, scanFile, scanTopics, result, reset: resetScanner } = useScanner(user, credits, setCredits);
-  const { history, loading: historyLoading, refreshHistory } = useLibrary(user, !authLoading);
+  const { history, communityReports, loading: historyLoading, communityLoading, refreshHistory, refreshCommunityReports } = useLibrary(user, !authLoading);
   const { myClassrooms, joinedClasses, isCroomsLoading, joinClassroom, createClassroom } = useClassrooms(user, !authLoading);
 
   // Theme Sync
@@ -49,6 +49,7 @@ export default function App() {
   useEffect(() => {
     if (result && status === "success") {
       setActiveSet(result);
+      setReportSettings(result.reportSettings || { includeAnswers: true, brandLabel: "Question Fetcher" });
       setActiveTab("classrooms");
       refreshHistory();
       // Also refresh profile to update credits from backend
@@ -65,11 +66,13 @@ export default function App() {
     const questions = reportSet.questions || [];
     const subject = reportSet.subject || "Chemistry"; // Fallback to Chemistry for ChemScan
 
+    const exportSettings = reportSet.reportSettings || reportSettings;
+
     try {
       if (type === 'pdf') {
-        await generateQuestionsPDF(topic, questions, subject, reportSettings);
+        await generateQuestionsPDF(topic, questions, subject, exportSettings);
       } else {
-        await generateQuestionsDocx(topic, questions, subject, reportSettings);
+        await generateQuestionsDocx(topic, questions, subject, exportSettings);
       }
     } catch (error) {
       console.error("Export failed:", error);
@@ -104,6 +107,7 @@ export default function App() {
 
       toast.success("Report published to community library");
       setActiveSet((prev: any) => ({ ...prev, publishedId: payload.id, published: true }));
+      refreshCommunityReports();
     } catch (error: any) {
       console.error("Publish failed:", error);
       toast.error(error.message || "Publish failed");
@@ -148,13 +152,17 @@ export default function App() {
         return (
           <LibraryWindow 
             history={history}
+            communityReports={communityReports}
             loading={historyLoading}
+            communityLoading={communityLoading}
             onSelect={(set) => {
               setActiveSet(set);
+              setReportSettings(set.reportSettings || { includeAnswers: true, brandLabel: "Question Fetcher" });
               setActiveTab("classrooms");
             }}
             onExport={(set, type) => {
               setActiveSet(set);
+              setReportSettings(set.reportSettings || { includeAnswers: true, brandLabel: "Question Fetcher" });
               handleExport(type, set); 
             }}
           />

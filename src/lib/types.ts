@@ -3,6 +3,10 @@ import { ScanResult } from "@/src/lib/gemini";
 export interface HistoryItem extends ScanResult {
   id?: string;
   timestamp: number;
+  reportSettings?: {
+    includeAnswers: boolean;
+    brandLabel: string;
+  };
 }
 
 export interface CreditPack {

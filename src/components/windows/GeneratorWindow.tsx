@@ -230,8 +230,6 @@ export function GeneratorWindow({
                     </div>
                   </div>
                 )
-              } else {
-                )
               ) : (
                 <div className="flex flex-col items-center text-center space-y-12 w-full max-w-md relative z-10">
                   <div className="relative">
@@ -290,7 +288,7 @@ export function GeneratorWindow({
         <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-white/60">
           Synthetic Knowledge Framework v2.4
         </p>
-      </div>
+      </footer>
     </div>
   );
 }

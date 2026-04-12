@@ -404,6 +404,20 @@ async function startServer() {
     }
   });
 
+  app.get("/api/community-library", async (req, res) => {
+    try {
+      const snapshot = await db.collection("community_library")
+        .orderBy("timestamp", "desc")
+        .limit(50)
+        .get();
+
+      const banks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      res.json({ banks });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ─── CLASSROOM: Create Code ────────────────────────────────────────────────
   app.post("/api/classroom/create", async (req, res) => {
     try {
