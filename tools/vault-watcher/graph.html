@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Vault Graph</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>body{font-family:system-ui;margin:0;padding:8px}#m{width:100%;height:80vh;border:1px solid #ccc}</style>
+  <script src="https://unpkg.com/vis-network@9.1.2/dist/vis-network.min.js"></script>
+</head>
+<body>
+  <h3>Vault Graph</h3>
+  <div id="m"></div>
+  <script>
+    async function load(){
+      try{
+        const r = await fetch('/graph.json');
+        const j = await r.json();
+        const nodes = j.nodes.map((n,i)=>({id:i,label:n.title,orig:n.id}));
+        const idByPath = new Map(j.nodes.map((n,i)=>[n.id,i]));
+        const edges = j.edges.map(e=>({from:idByPath.get(e.source), to:idByPath.get(e.target)})).filter(x=>x.from!==undefined&&x.to!==undefined);
+        const container = document.getElementById('m');
+        const data = {nodes, edges};
+        const options = {physics:{stabilization:false}};
+        const network = new vis.Network(container, data, options);
+        network.on('selectNode', params=>{ const n = nodes.find(x=>x.id===params.nodes[0]); alert(n.orig); });
+      }catch(e){document.getElementById('m').textContent = 'Failed to load graph: '+e}
+    }
+    load();
+  </script>
+</body>
+</html>

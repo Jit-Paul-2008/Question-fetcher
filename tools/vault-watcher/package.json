@@ -1,0 +1,12 @@
+{
+  "name": "vault-watcher",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "chokidar": "^3.5.3"
+  }
+}

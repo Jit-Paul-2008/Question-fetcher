@@ -1,0 +1,58 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Obsidian Vault Live Feed</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body{font-family:system-ui,Segoe UI,Arial;margin:0;padding:12px;background:#0f1724;color:#e6eef8}
+    #container{max-width:980px;margin:0 auto}
+    h1{margin:0 0 8px 0}
+    .controls{margin-bottom:8px}
+    button{margin-right:6px}
+    .item{padding:8px;border-bottom:1px solid rgba(255,255,255,0.04)}
+    .meta{font-size:12px;color:#9fb0c8}
+    pre{white-space:pre-wrap;background:#071022;padding:8px;border-radius:6px;color:#bfe5ff;overflow:auto}
+  </style>
+</head>
+<body>
+  <div id="container">
+    <h1>Vault Live Feed</h1>
+    <div class="controls">
+      <button id="pause">Pause</button>
+      <button id="clear">Clear</button>
+      <label style="margin-left:12px;color:#9fb0c8">Auto-scroll</label>
+      <input id="autoscroll" type="checkbox" checked />
+    </div>
+    <div id="list"></div>
+  </div>
+  <script>
+    const es = new EventSource('/events');
+    const list = document.getElementById('list');
+    const pauseBtn = document.getElementById('pause');
+    const clearBtn = document.getElementById('clear');
+    const autoscroll = document.getElementById('autoscroll');
+    let paused = false;
+    pauseBtn.onclick = ()=>{ paused = !paused; pauseBtn.textContent = paused ? 'Resume' : 'Pause'; };
+    clearBtn.onclick = ()=>list.innerHTML = '';
+
+    function addItem(obj){
+      const d = document.createElement('div'); d.className='item';
+      const m = document.createElement('div'); m.className='meta'; m.textContent = `${obj.ts} — ${obj.type} — ${obj.path}`;
+      d.appendChild(m);
+      if(obj.snippet){ const p = document.createElement('pre'); p.textContent = obj.snippet; d.appendChild(p); }
+      list.insertBefore(d, list.firstChild);
+      if(autoscroll.checked) window.scrollTo(0,0);
+    }
+
+    es.onmessage = e => {
+      if(paused) return;
+      try{ addItem(JSON.parse(e.data)); }catch(err){console.error(err)}
+    };
+    es.onerror = e => console.error('SSE error', e);
+
+    // load history
+    fetch('/history').then(r=>r.json()).then(a=>a.slice().reverse().forEach(addItem)).catch(()=>{});
+  </script>
+</body>
+</html>
