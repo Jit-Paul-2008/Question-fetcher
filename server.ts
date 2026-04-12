@@ -2,11 +2,9 @@ import "dotenv/config";
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
-import { fileURLToPath } from "url";
 import cors from "cors";
 import crypto from "crypto";
 import { spawn } from 'child_process';
-import fs from 'fs/promises';
 import { GoogleGenAI, Type } from "@google/genai";
 import { tavily } from "@tavily/core";
 import admin from "firebase-admin";
@@ -14,7 +12,24 @@ import { getFirestore } from "firebase-admin/firestore";
 import Razorpay from "razorpay";
 import mammoth from "mammoth";
 import { Pinecone } from "@pinecone-database/pinecone";
-import { getDomainsForContext } from "./src/lib/search-taxonomy.js";
+import { verifyTextInProcess } from "./src/server/verifier/inProcessVerifier.js";
+import { getCacheKey, getIncludeDomains } from "./src/server/scan/helpers.js";
+import {
+  CACHE_MAX_AGE_MS,
+  CACHE_MIN_QUESTIONS,
+  GEMINI_COST_BUFFER_INR,
+  GEMINI_EMBEDDING_MODEL,
+  GEMINI_GENERATION_MODEL,
+  MAX_SCAN_COST_INR,
+  MAX_TAVILY_QUERIES,
+  MAX_TOPUP_ATTEMPTS,
+  MIN_STRUCTURED_SOURCES,
+  SUPPLEMENTAL_TAVILY_QUERIES,
+  TAVILY_CREDIT_USD,
+  TAVILY_MAX_RESULTS,
+  TAVILY_SEARCH_DEPTH,
+  USD_TO_INR,
+} from "./src/server/config/scanConfig.js";
 
 // ─── Constants & Utilities ───────────────────────────────────────────────────
 const handleError = (res: any, error: any, context: string = "Server") => {
@@ -45,9 +60,6 @@ if (admin.apps.length === 0) {
 }
 const db = getFirestore("ai-studio-037afd9e-7975-495a-b35d-27afa336d0de");
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 // ─── Credit Packs (source of truth — shared with /api/config) ────────────────
 const CREDIT_PACKS = {
   starter: { credits: 5, amount: 4900, name: "Starter Pack", display: "₹49" },
@@ -57,14 +69,6 @@ const CREDIT_PACKS = {
 type PackId = keyof typeof CREDIT_PACKS;
 
 const FREE_WELCOME_CREDITS = 3;
-
-const GEMINI_GENERATION_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
-const GEMINI_EMBEDDING_MODEL = process.env.GEMINI_EMBEDDING_MODEL || "";
-const CACHE_MIN_QUESTIONS = Math.max(1, parseInt(process.env.CACHE_MIN_QUESTIONS || "10", 10));
-const CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
-// Verifier mode: 'annotate' (default) or 'block'
-const VERIFIER_MODE = (process.env.VERIFIER_MODE || 'annotate').toLowerCase();
-const RATE_LIMIT_FAIL_OPEN = (process.env.RATE_LIMIT_FAIL_OPEN || "true").toLowerCase() === "true";
 
 // ─── Razorpay client (Use getRazorpay() instead) ──────────────────────────
 
@@ -237,115 +241,6 @@ async function startServer() {
   });
 
   app.get("/api/health", (req, res) => res.json({ status: "ok" }));
-
-  function getIncludeDomains(exams: string[], subject: string, targetClass: string): string[] {
-    return getDomainsForContext({
-      exams: exams || [],
-      subject: subject || "Chemistry",
-      targetClass: targetClass || "12"
-    });
-  }
-
-  // ─── Cache Key Generator (RAG) ─────────────────────────────────────────────
-  function getCacheKey(subject: string, topic: string, exams: string[]) {
-    const sortedExams = [...exams].sort().join(",");
-    const raw = `${subject.toLowerCase()}|${topic.toLowerCase().trim()}|${sortedExams}`;
-    return crypto.createHash("md5").update(raw).digest("hex");
-  }
-
-  // ─── In-process verifier helpers (port of scripts/verify_response.js + retrieve_facts.js)
-  const VERIFIER_STOPWORDS = new Set(['the','is','in','at','of','and','a','an','to','for','on','by','with','that','this','it','as','be','are','was','were','from','or','which','but','has','have']);
-
-  function splitSentences(text: string) {
-    return text.split(/(?<=[.!?])\s+(?=[A-Z0-9"'\u00C0-\u017F])/u);
-  }
-
-  function buildQuery(s: string) {
-    const cleaned = s.replace(/[^^\p{L}\p{N}\-\s]/gu, ' ').toLowerCase();
-    const toks = cleaned.split(/\s+/).filter(t => t && !VERIFIER_STOPWORDS.has(t) && t.length > 1);
-    return toks.join(' ');
-  }
-
-  async function walkMarkdownFiles(dir: string, out: string[]) {
-    try {
-      const items = await fs.readdir(dir, { withFileTypes: true });
-      for (const it of items) {
-        const p = path.join(dir, it.name);
-        if (it.isDirectory()) await walkMarkdownFiles(p, out);
-        else if (it.isFile() && p.endsWith('.md')) out.push(p);
-      }
-    } catch (e) {
-      // ignore
-    }
-  }
-
-  function scoreContent(content: string, tokens: string[]) {
-    const lc = content.toLowerCase();
-    let s = 0;
-    for (const t of tokens) {
-      if (!t) continue;
-      s += (lc.split(t).length - 1);
-    }
-    return s;
-  }
-
-  async function snippetFor(content: string, tokens: string[]) {
-    const lc = content.toLowerCase();
-    for (const t of tokens) {
-      const i = lc.indexOf(t);
-      if (i !== -1) {
-        const start = Math.max(0, i - 120);
-        return content.slice(start, start + 400).replace(/\n/g, '\n');
-      }
-    }
-    return content.slice(0, 200);
-  }
-
-  async function retrieveFactsInProcess(query: string) {
-    const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
-    const root = path.resolve('memories', 'repo');
-    const files: string[] = [];
-    await walkMarkdownFiles(root, files);
-    const results: any[] = [];
-    for (const f of files) {
-      try {
-        const content = await fs.readFile(f, 'utf8');
-        const s = scoreContent(content, tokens);
-        if (s > 0) {
-          const snip = await snippetFor(content, tokens);
-          results.push({ file: path.relative(process.cwd(), f), score: s, snippet: snip });
-        }
-      } catch (e) {
-        // skip
-      }
-    }
-    results.sort((a, b) => b.score - a.score);
-    return results.slice(0, 10);
-  }
-
-  async function verifyTextInProcess(text: string) {
-    const t = (text || '').trim();
-    if (!t) throw new Error('empty input');
-    const sentences = splitSentences(t).map(s => s.trim()).filter(Boolean);
-    const report: any = { total_sentences: sentences.length, supported: [], unsupported: [], details: [] };
-
-    for (const s of sentences) {
-      const q = buildQuery(s);
-      if (!q) { report.unsupported.push(s); continue; }
-      try {
-        const results = await retrieveFactsInProcess(q);
-        if (results && results.length > 0) {
-          report.supported.push({ sentence: s, facts: results.slice(0, 5) });
-        } else {
-          report.unsupported.push(s);
-        }
-      } catch (err: any) {
-        report.details.push({ sentence: s, error: err?.message || String(err) });
-        report.unsupported.push(s);
-      }
-    }
-    return { ok: report.unsupported.length === 0, report };
-  }
 
 
   // ─── Razorpay: Create Order ───────────────────────────────────────────────
@@ -666,7 +561,7 @@ async function startServer() {
 
 
   // ─── SECURE SCAN PIPELINE ─────────────────────────────────────────────────
-  // Exactly 2 Gemini calls + 3 Tavily searches, regardless of image/topic count
+  // Domain-first retrieval with adaptive top-up and open-web rescue only if floor is missed.
   app.post("/api/scan", async (req, res) => {
     let uid: string | null = null;
 
@@ -796,6 +691,13 @@ async function startServer() {
 
       const ai = new GoogleGenAI({ apiKey: geminiKey });
       const tv = tavily({ apiKey: tavilyKey });
+      let geminiCallCount = 0;
+
+      const generateWithRetry = (config: any) =>
+        withRetry(() => {
+          geminiCallCount += 1;
+          return ai.models.generateContent(config);
+        });
 
       const examMap: Record<string, string> = {
         "jee-mains": "JEE Mains", "jee-advanced": "JEE Advanced",
@@ -840,15 +742,14 @@ async function startServer() {
             `Subject: ${subjectLabel}. Topics provided: "${topic}".`,
             "",
             "STEP 1 — Brainstorm Search Queries:",
-            "Based on the provided academic level and topics, generate 3 highly targeted search queries to find real exam questions.",
-            "Distribute the topics across the 3 queries.",
-            `Query 1: Focus on core PYQs for: ${topic}.`,
-            `Query 2: Focus on Sample Paper MCQs and detailed solutions for: ${topic}.`,
-            `Query 3: Focus on HOTS (Higher Order Thinking Skills) and complex problems for: ${topic}.`,
+            "Based on the provided academic level and topics, generate 6 to 8 highly targeted search queries to find real exam questions.",
+            "Distribute the topics across the queries and use synonyms to widen retrieval.",
+            `Examples: ${subjectLabel} ${primaryExam} previous year questions ${topic}`,
+            `Examples: ${subjectLabel} ${primaryExam} solved MCQ sample paper ${topic}`,
+            `Examples: ${subjectLabel} HOTS assertion reason questions ${topic} ${allExams}`,
           ].join("\n");
 
-          const response = await withRetry(() =>
-            ai.models.generateContent({
+          const response = await generateWithRetry({
               model: GEMINI_GENERATION_MODEL,
               contents: { parts: [{ text: topicPrompt }] },
               config: {
@@ -864,8 +765,7 @@ async function startServer() {
                   required: ["topicDetected", "summary", "keywords", "searchQueries"],
                 },
               },
-            })
-          );
+            });
           analysisText = response.text || "";
         } else {
           // ── Vision / Notes Mode ──
@@ -877,16 +777,17 @@ async function startServer() {
             "STEP 1 — Extract and DEDUPLICATE topics:",
             `Look at ALL uploaded content (images, PDFs, text) together as a single set of studies. List every unique sub-topic, formula, and diagram. Stay strictly within the subject: ${subjectLabel}.`,
             "",
-            "STEP 2 — Generate EXACTLY 3 diverse search queries:",
-            "Distribute the detected topics across the 3 queries so each query is specific and targeted.",
+            "STEP 2 — Generate 4-6 diverse search queries:",
+            "Distribute the detected topics across the queries so each query is specific and targeted.",
             "Do NOT dump all topics into a single query — that dilutes results.",
-            `Query 1: Focus on the TOP 1-2 most important topics. Format: (mainTopic1 OR mainTopic2) ${subjectLabel} ${primaryExam} PYQ past year questions with solutions`,
-            `Query 2: Focus on the NEXT 1-2 topics. Format: (nextTopic1 OR nextTopic2) ${subjectLabel} ${primaryExam} sample paper MCQ questions`,
-            `Query 3: Cover remaining topics + HOTS. Format: (remainingTopic1 OR remainingTopic2) ${subjectLabel} HOTS important questions ${allExams}`,
+            `Prefer 4-6 concise queries. Examples of good formats:`,
+            `- (mainTopic1 OR mainTopic2) ${subjectLabel} ${primaryExam} PYQ past year questions with solutions`,
+            `- (nextTopic1 OR nextTopic2) ${subjectLabel} ${primaryExam} sample paper MCQ questions`,
+            `- (remainingTopic1 OR remainingTopic2) ${subjectLabel} HOTS important questions ${allExams}`,
+            "Include synonyms and common exam phrasing to improve recall across sources.",
           ].join("\n");
 
-          const analysisResponse = await withRetry(() =>
-            ai.models.generateContent({
+          const analysisResponse = await generateWithRetry({
               model: GEMINI_GENERATION_MODEL,
               contents: { parts: [...contentParts, { text: analysisPrompt }] },
               config: {
@@ -902,8 +803,7 @@ async function startServer() {
                   required: ["topicDetected", "summary", "keywords", "searchQueries"],
                 },
               },
-            })
-          );
+            });
           analysisText = analysisResponse.text || "";
         }
       } catch (err: any) {
@@ -921,38 +821,98 @@ async function startServer() {
       }
       console.log(`[Scan] uid=${uid} subject=${subjectLabel} topic=${analysis.topicDetected} queries=${analysis.searchQueries?.length}`);
 
-      const rawQueries = (analysis.searchQueries || []).slice(0, 3);
-      const queries = rawQueries.filter((q: string) => q && q.trim().length > 0);
+      const topicSeed = String(analysis.topicDetected || topic || subjectLabel).trim();
+      const rawQueries = (analysis.searchQueries || []).slice(0, 6);
+      const aiQueries = rawQueries.filter((q: string) => q && q.trim().length > 0);
+      const fallbackQueries = [
+        `${subjectLabel} ${primaryExam} previous year questions ${topicSeed}`,
+        `${subjectLabel} ${primaryExam} solved MCQ ${topicSeed}`,
+        `${subjectLabel} important questions ${topicSeed} ${allExams}`,
+      ];
       const includeDomains = getIncludeDomains(examList, subjectLabel, targetClass);
+      const domainScoped = Array.isArray(includeDomains) ? includeDomains.slice(0, 80) : [];
 
-      // If taxonomy returns a very small set of domains, avoid restricting the search
-      // so the discovery engine can surface broader sources. This prevents cases
-      // where only a handful of domains yield too few questions.
-      const shouldRestrictDomains = Array.isArray(includeDomains) && includeDomains.length >= 25;
-      if (!shouldRestrictDomains) console.warn(`[Scan] taxonomy returned ${includeDomains.length} domains — skipping domain restriction for broader search results.`);
+      const fallbackCreditPerRequest = TAVILY_SEARCH_DEPTH === "advanced" ? 2 : 1;
+      const estimatedInrPerRequest = fallbackCreditPerRequest * TAVILY_CREDIT_USD * USD_TO_INR;
+      const tavilyBudgetInr = Math.max(0.3, MAX_SCAN_COST_INR - GEMINI_COST_BUFFER_INR);
+      const budgetedQueryCap = Math.max(1, Math.floor(tavilyBudgetInr / estimatedInrPerRequest));
+      const effectiveQueryCap = Math.max(1, Math.min(MAX_TAVILY_QUERIES, budgetedQueryCap));
 
-      const allSearchResults = await Promise.all(
-        queries.map((q: string) =>
+      const queries = Array.from(new Set([...aiQueries, ...fallbackQueries])).slice(0, effectiveQueryCap);
+      const allSearchResults: any[] = [];
+      let tavilyRequestCount = 0;
+
+      const runSearchBatch = async (batchQueries: string[], useDomains: boolean) => {
+        if (batchQueries.length === 0) return;
+        const tasks = batchQueries.map((q) =>
           tv.search(q, {
-            searchDepth: "advanced",
-            maxResults: 15,
-            ...(shouldRestrictDomains ? { includeDomains } : {})
+            searchDepth: TAVILY_SEARCH_DEPTH,
+            maxResults: TAVILY_MAX_RESULTS,
+            ...(useDomains && domainScoped.length > 0 ? { includeDomains: domainScoped } : {}),
+          }).catch((err) => {
+            console.error(`Tavily search failed: ${q}`, err.message);
+            return { results: [] };
           })
-            .catch(err => { console.error(`Tavily failed: ${q}`, err.message); return { results: [] }; })
-        )
-      );
+        );
+        const batchResults = await Promise.all(tasks);
+        allSearchResults.push(...batchResults);
+        tavilyRequestCount += batchQueries.length;
+      };
+
+      await runSearchBatch(queries, true);
+
+      const countUniqueSources = (results: any[]) => {
+        const seen = new Set<string>();
+        for (const sr of results) {
+          for (const r of (sr?.results || [])) {
+            const url = String(r?.url || "").trim();
+            const content = String(r?.content || "").trim();
+            if (!url || !content) continue;
+            seen.add(url);
+          }
+        }
+        return seen.size;
+      };
+
+      const initialSourceCount = countUniqueSources(allSearchResults);
+      if (initialSourceCount < MIN_STRUCTURED_SOURCES) {
+        const remainingBudgetQueries = Math.max(0, budgetedQueryCap - tavilyRequestCount);
+        const supplementalCap = Math.min(SUPPLEMENTAL_TAVILY_QUERIES, remainingBudgetQueries);
+        if (supplementalCap > 0) {
+          const supplementalQueries = Array.from(new Set([
+            `${subjectLabel} ${primaryExam} ${topicSeed} mcq with answers`,
+            `${subjectLabel} ${primaryExam} assertion reason questions ${topicSeed}`,
+            `${subjectLabel} ${targetClass || "12"} ${topicSeed} sample paper solved questions`,
+            `${subjectLabel} ${allExams} important ${topicSeed} practice questions`,
+          ]))
+            .filter((q) => !queries.includes(q))
+            .slice(0, supplementalCap);
+
+          if (supplementalQueries.length > 0) {
+            console.log(
+              `[Scan] low source coverage=${initialSourceCount}, running supplemental Tavily queries=${supplementalQueries.length}`
+            );
+            // Keep supplemental retrieval domain-scoped for the active context.
+            await runSearchBatch(supplementalQueries, true);
+          }
+        }
+      }
+
+      let tavilyCreditsUsed = allSearchResults.reduce((sum, sr) => {
+        const reported = Number((sr as any)?.usage?.credits || 0);
+        return sum + (reported > 0 ? reported : fallbackCreditPerRequest);
+      }, 0);
 
       const seenUrls = new Set<string>();
       const combined: string[] = [];
       let totalChars = 0;
-      const MAX_SOURCES_FOR_STRUCTURING = 20;
-      const MAX_COMBINED_CHARS = 24000;
+      const MAX_SOURCES_FOR_STRUCTURING = 32;
+      const MAX_COMBINED_CHARS = 65000;
       for (const sr of allSearchResults) {
         for (const r of (sr.results || [])) {
           if (!seenUrls.has(r.url)) {
             seenUrls.add(r.url);
-            // Trim to 2500 chars — enough to capture full questions + options from most sources
-            const snippet = (r.content || "").slice(0, 2500).trim();
+            const snippet = (r.content || "").slice(0, 1600).trim();
             if (!snippet) continue;
             const sourceBlock = `[Source: ${r.url}]\n${snippet}`;
             if (combined.length >= MAX_SOURCES_FOR_STRUCTURING) break;
@@ -985,8 +945,7 @@ async function startServer() {
         combined.length > 0 ? `Search Results:\n${combined.join("\n---\n")}` : "No search results available. Proceed with expert generation.",
       ].join("\n");
 
-      const structureResponse = await withRetry(() =>
-        ai.models.generateContent({
+      const structureResponse = await generateWithRetry({
           model: GEMINI_GENERATION_MODEL,
           contents: structurePrompt,
           config: {
@@ -1010,15 +969,14 @@ async function startServer() {
                       targetExam: { type: Type.STRING },
                       topic: { type: Type.STRING },
                     },
-                    required: ["text", "options", "answer", "source", "year", "type", "targetExam", "topic"],
+                    required: ["text", "options", "answer"],
                   },
                 },
               },
               required: ["questions"],
             },
           },
-        })
-      );
+        });
 
       let structuredText = "";
       try {
@@ -1029,39 +987,47 @@ async function startServer() {
         return res.status(500).json({ error: `Question structuring failed: ${err.message}` });
       }
 
+      const normalizeQuestion = (raw: any) => {
+        if (!raw || typeof raw !== "object") return null;
+
+        const rawText = String(raw.text || raw.question || "").trim();
+        if (!rawText) return null;
+
+        let options = Array.isArray(raw.options)
+          ? raw.options.filter((opt: any) => typeof opt === "string" && opt.trim().length > 0).map((opt: string) => opt.trim())
+          : [];
+
+        const optionFillers = ["Option A", "Option B", "Option C", "Option D"];
+        if (options.length < 4) {
+          while (options.length < 4) options.push(optionFillers[options.length]);
+        }
+        if (options.length > 4) options = options.slice(0, 4);
+
+        const answer = String(raw.answer || options[0] || "Option A").trim();
+        const cleanedSource = String(raw.source || "")
+          .replace(/https?:\/\/[^\s]+/g, "")
+          .trim() || "Standard Practice Question";
+        const rawType = String(raw.type || "Practice").trim();
+        const normalizedType = ["PYQ", "Sample Paper", "HOTS", "Practice"].includes(rawType)
+          ? rawType
+          : "Practice";
+
+        return {
+          text: rawText,
+          options,
+          answer,
+          source: cleanedSource,
+          year: String(raw.year || new Date().getFullYear()),
+          type: normalizedType,
+          targetExam: String(raw.targetExam || primaryExam || "General"),
+          topic: String(raw.topic || analysis.topicDetected || topicSeed || "General"),
+        };
+      };
+
       let structured: any = {};
       try {
         if (!structuredText) throw new Error("Empty AI response");
         structured = JSON.parse(structuredText);
-
-        // ── Post-processing: Source detail & Deduplication ──
-        if (structured.questions && Array.isArray(structured.questions)) {
-          const uniqueTexts = new Set<string>();
-          structured.questions = structured.questions
-            .filter((q: any) => q && typeof q === 'object') // Defensive check for null/invalid items
-            .filter((q: any) => {
-              if (q.source) {
-                q.source = q.source.replace(/https?:\/\/[^\s]+/g, "").trim();
-                if (!q.source) q.source = "Standard Practice Question";
-              }
-              
-              // Handle both 'text' and 'question' properties for backward/AI compatibility
-              const rawText = q.text || q.question || "";
-              const normalizedText = typeof rawText === 'string' 
-                ? rawText.toLowerCase().replace(/\s+/g, " ").trim()
-                : "";
-                
-              if (!normalizedText || uniqueTexts.has(normalizedText)) return false;
-              uniqueTexts.add(normalizedText);
-              
-              // Enforce 'text' property for consistency in UI and exports
-              q.text = rawText;
-              delete q.question;
-              return true;
-            });
-        } else {
-          structured.questions = [];
-        }
       } catch (err: any) {
         console.warn("[Scan:StructuringError] Initial parse failed, attempting repair", err?.message || err);
         try {
@@ -1074,8 +1040,7 @@ async function startServer() {
             structuredText.slice(0, 25000),
           ].join("\n");
 
-          const repaired = await withRetry(() =>
-            ai.models.generateContent({
+          const repaired = await generateWithRetry({
               model: GEMINI_GENERATION_MODEL,
               contents: repairPrompt,
               config: {
@@ -1099,48 +1064,66 @@ async function startServer() {
                           targetExam: { type: Type.STRING },
                           topic: { type: Type.STRING },
                         },
-                        required: ["text", "options", "answer", "source", "year", "type", "targetExam", "topic"],
+                        required: ["text", "options", "answer"],
                       },
                     },
                   },
                   required: ["questions"],
                 },
               },
-            })
-          );
+            });
 
           structured = JSON.parse(repaired.text || "{}");
-          if (!Array.isArray(structured.questions)) structured.questions = [];
         } catch (repairErr: any) {
           console.error("[Scan:StructuringError] Repair failed", repairErr, "Raw:", structuredText);
           await profileRef.update({ credits: admin.firestore.FieldValue.increment(1) }).catch(() => { });
           return res.status(500).json({ error: "AI structuring format error. Credits refunded. Please try again." });
         }
       }
+
+      const dedupeSet = new Set<string>();
+      const initialQuestions = Array.isArray(structured.questions) ? structured.questions : [];
+      const normalizedInitial: any[] = [];
+      for (const q of initialQuestions) {
+        const normalized = normalizeQuestion(q);
+        if (!normalized) continue;
+        const normText = normalized.text.toLowerCase().replace(/\s+/g, " ").trim();
+        if (!normText || dedupeSet.has(normText)) continue;
+        dedupeSet.add(normText);
+        normalizedInitial.push(normalized);
+      }
+      structured.questions = normalizedInitial;
+
       console.log(`[Scan] Extracted ${structured.questions?.length || 0} unique questions`);
 
-      // Ensure a practical minimum question set for user experience.
+      // Keep the enforced question floor with minimal-cost top-up.
       const MIN_QUESTIONS = 12;
-      if ((structured.questions?.length || 0) < MIN_QUESTIONS) {
-        const missingCount = MIN_QUESTIONS - (structured.questions?.length || 0);
+      const MAX_QUESTIONS = 35;
+      const TARGET_QUESTIONS = MIN_QUESTIONS;
+
+      for (let attempt = 0; attempt < MAX_TOPUP_ATTEMPTS && (structured.questions?.length || 0) < TARGET_QUESTIONS; attempt += 1) {
+        const currentCount = structured.questions?.length || 0;
+        const missingCount = TARGET_QUESTIONS - currentCount;
+        const requestCount = Math.min(12, Math.max(6, missingCount + 2));
+
         const existingQuestionTexts = (structured.questions || [])
           .map((q: any) => q?.text)
           .filter((t: any) => typeof t === "string")
-          .slice(0, 20);
+          .slice(0, 40);
 
         const topUpPrompt = [
-          `Generate ${missingCount + 4} additional unique ${subjectLabel} questions for topic: \"${analysis.topicDetected || topic}\".`,
+          `Generate ${requestCount} additional unique ${subjectLabel} questions for topic: \"${analysis.topicDetected || topicSeed}\".`,
           "Rules:",
           "- Return JSON only in the required schema.",
           "- Exactly 4 options per question.",
           "- Provide answer, source text (no URL), year, type, targetExam, topic.",
+          "- Use varied question styles: conceptual, numerical, assertion-reason, and application.",
           "- Do not repeat any existing questions listed below.",
           `Existing questions to avoid:\n${existingQuestionTexts.join("\n") || "None"}`,
         ].join("\n");
 
         try {
-          const topUpResponse = await withRetry(() =>
-            ai.models.generateContent({
+          const topUpResponse = await generateWithRetry({
               model: GEMINI_GENERATION_MODEL,
               contents: topUpPrompt,
               config: {
@@ -1164,38 +1147,267 @@ async function startServer() {
                           targetExam: { type: Type.STRING },
                           topic: { type: Type.STRING },
                         },
-                        required: ["text", "options", "answer", "source", "year", "type", "targetExam", "topic"],
+                        required: ["text", "options", "answer"],
                       },
                     },
                   },
                   required: ["questions"],
                 },
               },
-            })
-          );
+            });
 
-          const parsedTopUp = JSON.parse(topUpResponse.text || "{}") as any;
+          let parsedTopUp: any = {};
+          try {
+            parsedTopUp = JSON.parse(topUpResponse.text || "{}");
+          } catch (topUpParseErr: any) {
+            try {
+              const repairPrompt = [
+                "You are a JSON repair utility.",
+                "Fix the malformed JSON below and return valid JSON only.",
+                "Required shape: { questions: [{ text, options[4], answer, source, year, type, targetExam, topic }] }",
+                "Do not add markdown or explanations.",
+                "Malformed JSON:",
+                String(topUpResponse.text || "").slice(0, 20000),
+              ].join("\n");
+
+              const repaired = await generateWithRetry({
+                model: GEMINI_GENERATION_MODEL,
+                contents: repairPrompt,
+                config: {
+                  maxOutputTokens: 4096,
+                  temperature: 0,
+                  responseMimeType: "application/json",
+                  responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                      questions: {
+                        type: Type.ARRAY,
+                        items: {
+                          type: Type.OBJECT,
+                          properties: {
+                            text: { type: Type.STRING },
+                            options: { type: Type.ARRAY, items: { type: Type.STRING } },
+                            answer: { type: Type.STRING },
+                            source: { type: Type.STRING },
+                            year: { type: Type.STRING },
+                            type: { type: Type.STRING },
+                            targetExam: { type: Type.STRING },
+                            topic: { type: Type.STRING },
+                          },
+                          required: ["text", "options", "answer"],
+                        },
+                      },
+                    },
+                    required: ["questions"],
+                  },
+                },
+              });
+              parsedTopUp = JSON.parse(repaired.text || "{}");
+            } catch (repairErr: any) {
+              console.warn("[Scan:TopUp] JSON repair failed", topUpParseErr?.message || topUpParseErr, repairErr?.message || repairErr);
+              parsedTopUp = {};
+            }
+          }
+
           const topUpQuestions = Array.isArray(parsedTopUp.questions) ? parsedTopUp.questions : [];
 
-          const dedupeSet = new Set(
-            (structured.questions || [])
-              .map((q: any) => (q?.text || "").toLowerCase().replace(/\s+/g, " ").trim())
-              .filter(Boolean)
-          );
-
-          for (const q of topUpQuestions) {
-            const rawText = q?.text || q?.question || "";
-            const norm = typeof rawText === "string" ? rawText.toLowerCase().replace(/\s+/g, " ").trim() : "";
-            if (!norm || dedupeSet.has(norm)) continue;
-            q.text = rawText;
-            delete q.question;
-            dedupeSet.add(norm);
-            structured.questions.push(q);
-            if (structured.questions.length >= MIN_QUESTIONS) break;
+          for (const raw of topUpQuestions) {
+            const normalized = normalizeQuestion(raw);
+            if (!normalized) continue;
+            const normText = normalized.text.toLowerCase().replace(/\s+/g, " ").trim();
+            if (!normText || dedupeSet.has(normText)) continue;
+            dedupeSet.add(normText);
+            structured.questions.push(normalized);
+            if (structured.questions.length >= TARGET_QUESTIONS) break;
           }
         } catch (topUpErr) {
           console.warn("[Scan:TopUp] Could not top-up questions", topUpErr);
         }
+      }
+
+      if ((structured.questions?.length || 0) < MIN_QUESTIONS) {
+        // If domain-scoped retrieval was insufficient, do one open-web rescue pass
+        // before failing the scan.
+        const missingCount = MIN_QUESTIONS - (structured.questions?.length || 0);
+        const rescueQueries = Array.from(new Set([
+          `${subjectLabel} ${primaryExam} ${topicSeed} previous year MCQ with solutions`,
+          `${subjectLabel} ${topicSeed} assertion reason questions with answers`,
+          `${subjectLabel} ${targetClass || "12"} ${topicSeed} important questions`,
+          `${subjectLabel} ${allExams} ${topicSeed} sample paper solved questions`,
+        ])).slice(0, 3);
+
+        console.log(
+          `[Scan:Rescue] Question floor miss=${structured.questions?.length || 0}. Running open-web rescue queries=${rescueQueries.length}`
+        );
+
+        const rescueResults = await Promise.all(
+          rescueQueries.map((q) =>
+            tv.search(q, {
+              searchDepth: "basic",
+              maxResults: Math.min(20, Math.max(TAVILY_MAX_RESULTS, 12)),
+            }).catch((err) => {
+              console.error(`[Scan:Rescue] Tavily failed for query=${q}`, err.message);
+              return { results: [] };
+            })
+          )
+        );
+
+        tavilyRequestCount += rescueQueries.length;
+        tavilyCreditsUsed += rescueResults.reduce((sum, sr) => {
+          const reported = Number((sr as any)?.usage?.credits || 0);
+          return sum + (reported > 0 ? reported : 1);
+        }, 0);
+
+        const rescueSeen = new Set<string>();
+        const rescueCombined: string[] = [];
+        let rescueChars = 0;
+        const MAX_RESCUE_SOURCES = 20;
+        const MAX_RESCUE_CHARS = 36000;
+
+        for (const sr of rescueResults) {
+          for (const r of (sr.results || [])) {
+            const url = String(r?.url || "").trim();
+            if (!url || seenUrls.has(url) || rescueSeen.has(url)) continue;
+            const snippet = String(r?.content || "").slice(0, 1400).trim();
+            if (!snippet) continue;
+            rescueSeen.add(url);
+            const sourceBlock = `[Source: ${url}]\n${snippet}`;
+            if (rescueCombined.length >= MAX_RESCUE_SOURCES) break;
+            if (rescueChars + sourceBlock.length > MAX_RESCUE_CHARS) break;
+            rescueCombined.push(sourceBlock);
+            rescueChars += sourceBlock.length;
+          }
+          if (rescueCombined.length >= MAX_RESCUE_SOURCES || rescueChars >= MAX_RESCUE_CHARS) break;
+        }
+
+        if (rescueCombined.length > 0) {
+          const existingQuestionTexts = (structured.questions || [])
+            .map((q: any) => q?.text)
+            .filter((t: any) => typeof t === "string")
+            .slice(0, 50);
+
+          const rescuePrompt = [
+            `Use the open-web results below to generate ${Math.min(12, Math.max(6, missingCount + 2))} additional unique ${subjectLabel} questions for \"${analysis.topicDetected || topicSeed}\".`,
+            "Rules:",
+            "- Return JSON only in the required schema.",
+            "- Exactly 4 options per question.",
+            "- Provide answer, source text (no URL), year, type, targetExam, topic.",
+            "- Do not repeat existing questions.",
+            `Existing questions to avoid:\n${existingQuestionTexts.join("\n") || "None"}`,
+            `Open-web sources:\n${rescueCombined.join("\n---\n")}`,
+          ].join("\n");
+
+          try {
+            const rescueResponse = await generateWithRetry({
+              model: GEMINI_GENERATION_MODEL,
+              contents: rescuePrompt,
+              config: {
+                maxOutputTokens: 4096,
+                temperature: 0.2,
+                responseMimeType: "application/json",
+                responseSchema: {
+                  type: Type.OBJECT,
+                  properties: {
+                    questions: {
+                      type: Type.ARRAY,
+                      items: {
+                        type: Type.OBJECT,
+                        properties: {
+                          text: { type: Type.STRING },
+                          options: { type: Type.ARRAY, items: { type: Type.STRING } },
+                          answer: { type: Type.STRING },
+                          source: { type: Type.STRING },
+                          year: { type: Type.STRING },
+                          type: { type: Type.STRING },
+                          targetExam: { type: Type.STRING },
+                          topic: { type: Type.STRING },
+                        },
+                        required: ["text", "options", "answer"],
+                      },
+                    },
+                  },
+                  required: ["questions"],
+                },
+              },
+            });
+
+            let parsedRescue: any = {};
+            try {
+              parsedRescue = JSON.parse(rescueResponse.text || "{}");
+            } catch (rescueParseErr: any) {
+              try {
+                const repairPrompt = [
+                  "You are a JSON repair utility.",
+                  "Fix the malformed JSON below and return valid JSON only.",
+                  "Required shape: { questions: [{ text, options[4], answer, source, year, type, targetExam, topic }] }",
+                  "Do not add markdown or explanations.",
+                  "Malformed JSON:",
+                  String(rescueResponse.text || "").slice(0, 20000),
+                ].join("\n");
+
+                const repaired = await generateWithRetry({
+                  model: GEMINI_GENERATION_MODEL,
+                  contents: repairPrompt,
+                  config: {
+                    maxOutputTokens: 4096,
+                    temperature: 0,
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                      type: Type.OBJECT,
+                      properties: {
+                        questions: {
+                          type: Type.ARRAY,
+                          items: {
+                            type: Type.OBJECT,
+                            properties: {
+                              text: { type: Type.STRING },
+                              options: { type: Type.ARRAY, items: { type: Type.STRING } },
+                              answer: { type: Type.STRING },
+                              source: { type: Type.STRING },
+                              year: { type: Type.STRING },
+                              type: { type: Type.STRING },
+                              targetExam: { type: Type.STRING },
+                              topic: { type: Type.STRING },
+                            },
+                            required: ["text", "options", "answer"],
+                          },
+                        },
+                      },
+                      required: ["questions"],
+                    },
+                  },
+                });
+                parsedRescue = JSON.parse(repaired.text || "{}");
+              } catch (repairErr: any) {
+                console.warn("[Scan:Rescue] JSON repair failed", rescueParseErr?.message || rescueParseErr, repairErr?.message || repairErr);
+                parsedRescue = {};
+              }
+            }
+
+            const rescueQuestions = Array.isArray(parsedRescue.questions) ? parsedRescue.questions : [];
+            for (const raw of rescueQuestions) {
+              const normalized = normalizeQuestion(raw);
+              if (!normalized) continue;
+              const normText = normalized.text.toLowerCase().replace(/\s+/g, " ").trim();
+              if (!normText || dedupeSet.has(normText)) continue;
+              dedupeSet.add(normText);
+              structured.questions.push(normalized);
+              if (structured.questions.length >= MIN_QUESTIONS) break;
+            }
+          } catch (rescueErr) {
+            console.warn("[Scan:Rescue] Could not complete open-web rescue", rescueErr);
+          }
+        }
+      }
+
+      if ((structured.questions?.length || 0) < MIN_QUESTIONS) {
+        console.warn(`[Scan] Question floor not met even after open-web rescue: ${structured.questions?.length || 0}. Refunding credit.`);
+        await profileRef.update({ credits: admin.firestore.FieldValue.increment(1) }).catch(() => { });
+        return res.status(503).json({ error: `Could not generate the minimum ${MIN_QUESTIONS} questions right now. Credit refunded. Please retry.` });
+      }
+
+      if (Array.isArray(structured.questions) && structured.questions.length > MAX_QUESTIONS) {
+        structured.questions = structured.questions.slice(0, MAX_QUESTIONS);
       }
 
       const finalResult = {
@@ -1204,6 +1416,10 @@ async function startServer() {
         keywords: analysis.keywords || [],
         questions: structured.questions || [],
       };
+
+      console.log(
+        `[Scan:Cost] uid=${uid} geminiCalls=${geminiCallCount} tavilyRequests=${tavilyRequestCount} tavilyCredits=${tavilyCreditsUsed} depth=${TAVILY_SEARCH_DEPTH} maxQueries=${effectiveQueryCap} budgetInr=${MAX_SCAN_COST_INR.toFixed(2)} estInrPerReq=${estimatedInrPerRequest.toFixed(2)}`
+      );
 
       // NOTE: automatic verification on assistant replies has been removed.
       // The system will no longer block or annotate responses here.

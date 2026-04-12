@@ -16,7 +16,6 @@ RAZORPAY_WEBHOOK_SECRET=
 PINECONE_API_KEY=
 TAVILY_API_KEY=
 ADMIN_SECRET=
-RATE_LIMIT_FAIL_OPEN=true
 PORT=3000
 ```
 
@@ -47,4 +46,3 @@ If you deploy multiple environments, set `PUBLIC_APP_URL` appropriately in each 
 - Never expose Razorpay secret or admin secret in client bundles.
 - Re-run `npm run build` after dependency updates.
 This repo uses an in-memory rate limiter for the staging deployment by default. For production-scale deployments you can introduce a managed Redis (Upstash / Memorystore) and the corresponding distributed limiter.
-Set `RATE_LIMIT_FAIL_OPEN=false` if you prefer strict protection and are okay with in-memory fallback behavior during outages.
