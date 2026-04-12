@@ -1,10 +1,9 @@
-name: Publish Activity Feed
+name: Publish Activity Feed (manual)
 
+# Manual dispatch only: keep feed local by default. Run this workflow
+# manually from GitHub Actions if you want to publish the static feed.
 on:
-  push:
-    # ignore gh-pages to avoid recursion
-    branches-ignore:
-      - gh-pages
+  workflow_dispatch: {}
 
 jobs:
   build:
