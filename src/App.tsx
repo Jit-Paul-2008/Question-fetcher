@@ -29,7 +29,7 @@ export default function App() {
 
   // Initialize modular logic
   const { user, loading: authLoading, error: authError, credits, setCredits, login, register, googleLogin, logout, refreshProfile } = useAuth();
-  const { buyCredits } = usePayments(user, setCredits);
+  const { buyCredits } = usePayments(user, setCredits, refreshProfile);
   const { status, progress, scanFile, scanTopics, result, reset: resetScanner } = useScanner(user, credits, setCredits);
   const { history, loading: historyLoading, refreshHistory } = useLibrary(user, !authLoading);
   const { myClassrooms, joinedClasses, isCroomsLoading, joinClassroom, createClassroom } = useClassrooms(user, !authLoading);

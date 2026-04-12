@@ -17,7 +17,11 @@ function loadRazorpayScript(): Promise<void> {
   });
 }
 
-export function usePayments(user: User | null, setCredits: (c: number | ((p: number) => number)) => void) {
+export function usePayments(
+  user: User | null, 
+  setCredits: (c: number | ((p: number) => number)) => void,
+  refreshProfile?: () => Promise<void>
+) {
   const [razorpayKeyId, setRazorpayKeyId] = useState("");
   const [creditPacks, setCreditPacks] = useState<Record<string, CreditPack>>({});
   const [isBuying, setIsBuying] = useState<string | null>(null);
@@ -61,6 +65,12 @@ export function usePayments(user: User | null, setCredits: (c: number | ((p: num
           if (resJson.success) {
             setCredits(prev => prev + resJson.creditsAdded);
             toast.success("Credits added!");
+            
+            // Refresh profile from server to verify credits
+            if (refreshProfile) {
+              await refreshProfile();
+              console.log("[Payment:Complete] Credits refreshed from server");
+            }
             return true;
           }
           return false;
@@ -68,7 +78,7 @@ export function usePayments(user: User | null, setCredits: (c: number | ((p: num
         theme: { color: "#d4af37" },
       };
       new (window as any).Razorpay(options).open();
-    } catch {
+    } catch (err) {
       toast.error("Payment failed.");
     } finally {
       setIsBuying(null);

@@ -93,5 +93,19 @@ export function useAuth() {
     }
   };
 
-  return { user, loading, error, credits, setCredits, login, register, googleLogin, logout };
+  const refreshProfile = async () => {
+    if (!user) return;
+    try {
+      const profileRef = doc(db, `users/${user.uid}/profile`, "data");
+      const profileDoc = await getDoc(profileRef);
+      if (profileDoc.exists()) {
+        setCredits(profileDoc.data().credits || 0);
+        console.log(`[Profile:Refreshed] uid=${user.uid} credits=${profileDoc.data().credits}`);
+      }
+    } catch (err) {
+      console.error("Profile refresh error", err);
+    }
+  };
+
+  return { user, loading, error, credits, setCredits, login, register, googleLogin, logout, refreshProfile };
 }

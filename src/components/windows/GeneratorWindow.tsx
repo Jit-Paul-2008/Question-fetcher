@@ -230,6 +230,8 @@ export function GeneratorWindow({
                     </div>
                   </div>
                 )
+              } else {
+                )
               ) : (
                 <div className="flex flex-col items-center text-center space-y-12 w-full max-w-md relative z-10">
                   <div className="relative">

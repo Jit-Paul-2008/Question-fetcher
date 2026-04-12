@@ -387,14 +387,19 @@ async function startServer() {
   // ─── COMMUNITY LIBRARY: Fetch ──────────────────────────────────────────────
   app.get("/api/library", async (req, res) => {
     try {
-      const snapshot = await db.collection("community_library")
+      const uid = await verifyToken(req.headers.authorization);
+      
+      const snapshot = await db.collection(`users/${uid}/history`)
         .orderBy("timestamp", "desc")
-        .limit(20)
+        .limit(50)
         .get();
 
       const banks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       res.json({ banks });
     } catch (err: any) {
+      if (err.message === "AUTH_MISSING" || err.message === "AUTH_INVALID") {
+        return res.status(401).json({ error: "Authentication required" });
+      }
       res.status(500).json({ error: err.message });
     }
   });
@@ -1005,6 +1010,34 @@ async function startServer() {
   // ─── Admin Migration Endpoint (One-time use) ──────────────────────────────────
   app.post("/api/admin/backfill", async (req, res) => {
     try {
+      // Verify admin token or secret
+      const adminSecret = process.env.ADMIN_SECRET;
+      const authHeader = req.headers.authorization;
+      
+      // Check for valid admin authentication
+      let isAdmin = false;
+      
+      // Method 1: Admin secret in header
+      if (adminSecret && authHeader === `Bearer ${adminSecret}`) {
+        isAdmin = true;
+      }
+      
+      // Method 2: Firebase ID token with admin claim
+      if (!isAdmin && authHeader) {
+        try {
+          const uid = await verifyToken(authHeader);
+          const userRecord = await admin.auth().getUser(uid);
+          isAdmin = userRecord.customClaims?.admin === true;
+        } catch {
+          isAdmin = false;
+        }
+      }
+      
+      if (!isAdmin) {
+        console.warn("[Admin:Unauthorized] Backfill attempt without proper auth");
+        return res.status(403).json({ error: "Forbidden: Admin access required" });
+      }
+
       const snap = await db.collection("global_cache").get();
       let vectorizedCount = 0;
 
@@ -1027,6 +1060,7 @@ async function startServer() {
           vectorizedCount++;
         }
       }
+      console.log(`[Admin:Backfill:Complete] Processed ${snap.size} items, vectorized ${vectorizedCount}`);
       res.json({ success: true, processed: snap.size, vectorized: vectorizedCount });
     } catch (err) {
       console.error("[Admin:Backfill:Error]", err);
