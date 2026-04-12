@@ -1,0 +1,9 @@
+{
+  "autoPull": false,
+  "autoPullInterval": 60,
+  "autoCommit": true,
+  "autoCommitInterval": 60,
+  "autoPush": true,
+  "autoPushInterval": 60,
+  "commitMessage": "obsidian: auto-save {{date}}"
+}
