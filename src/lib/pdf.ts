@@ -1,6 +1,12 @@
 import type { Question } from "./gemini";
+import type { ReportRenderOptions } from "./types";
 
-export async function generateQuestionsPDF(topic: string, questions: Question[], subject: string = "Subject") {
+export async function generateQuestionsPDF(
+  topic: string,
+  questions: Question[],
+  subject: string = "Subject",
+  options: ReportRenderOptions = { includeAnswers: true, brandLabel: "Question Fetcher" }
+) {
   const { jsPDF } = await import("jspdf");
   if (!jsPDF) {
     console.error("jsPDF is not loaded correctly");
@@ -21,6 +27,11 @@ export async function generateQuestionsPDF(topic: string, questions: Question[],
   doc.setTextColor(100, 100, 100);
   doc.text(`Topic: ${topic}`, pageWidth / 2, y, { align: "center" });
   y += 15;
+
+  doc.setFontSize(9);
+  doc.setTextColor(120, 120, 120);
+  doc.text(`Prepared by ${options.brandLabel || "Question Fetcher"}`, pageWidth / 2, y, { align: "center" });
+  y += 10;
 
   doc.setDrawColor(200, 200, 200);
   doc.line(20, y, pageWidth - 20, y);
@@ -54,11 +65,18 @@ export async function generateQuestionsPDF(topic: string, questions: Question[],
     });
     y += 2;
 
-    // Answer
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(0, 128, 0);
-    doc.text(`Answer: ${q.answer}`, 20, y);
-    y += 7;
+    // Answer / answer key visibility
+    if (options.includeAnswers) {
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(0, 128, 0);
+      doc.text(`Answer: ${q.answer}`, 20, y);
+      y += 7;
+    } else {
+      doc.setFont("helvetica", "italic");
+      doc.setTextColor(140, 140, 140);
+      doc.text("Answer: Hidden", 20, y);
+      y += 7;
+    }
 
     // Source and Year
     doc.setFontSize(9);
@@ -68,5 +86,6 @@ export async function generateQuestionsPDF(topic: string, questions: Question[],
     y += 15;
   });
 
-  doc.save(`${subject}_Questions_${String(topic || 'Report').replace(/\s+/g, "_")}.pdf`);
+  const suffix = options.includeAnswers ? "With_Answers" : "Question_Only";
+  doc.save(`${subject}_Questions_${String(topic || 'Report').replace(/\s+/g, "_")}_${suffix}.pdf`);
 }

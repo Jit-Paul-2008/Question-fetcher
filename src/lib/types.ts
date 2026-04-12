@@ -12,6 +12,15 @@ export interface CreditPack {
   display: string;
 }
 
+export interface ReportSettings {
+  includeAnswers: boolean;
+  brandLabel: string;
+}
+
+export interface ReportRenderOptions extends ReportSettings {
+  topicLabel?: string;
+}
+
 export type ScanMode = "notes" | "topics";
 export type ScanStatus = "idle" | "uploading" | "processing" | "success" | "failed";
 export type ActiveTab = "generator" | "library" | "classrooms" | "map";

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { toast } from "sonner";
 import { Shell } from "./components/layout/Shell";
 import { AuthWindow } from "./components/windows/AuthWindow";
 import { GeneratorWindow } from "./components/windows/GeneratorWindow";
@@ -19,13 +20,18 @@ import { generateQuestionsPDF } from "./lib/pdf";
 import { generateQuestionsDocx } from "./lib/docx";
 
 // Types
-import { ActiveTab, Theme } from "./lib/types";
+import { ActiveTab, Theme, ReportSettings } from "./lib/types";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("generator");
   const [theme, setTheme] = useState<Theme>("light");
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [activeSet, setActiveSet] = useState<any>(null);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [reportSettings, setReportSettings] = useState<ReportSettings>({
+    includeAnswers: true,
+    brandLabel: "Question Fetcher",
+  });
 
   // Initialize modular logic
   const { user, loading: authLoading, error: authError, credits, setCredits, login, register, googleLogin, logout, refreshProfile } = useAuth();
@@ -52,21 +58,57 @@ export default function App() {
 
   const toggleTheme = () => setTheme(prev => prev === "light" ? "dark" : "light");
 
-  const handleExport = async (type: 'pdf' | 'docx') => {
-    if (!activeSet) return;
+  const handleExport = async (type: 'pdf' | 'docx', reportSet: any = activeSet) => {
+    if (!reportSet) return;
     
-    const topic = activeSet.title || activeSet.topic || "Research Synthesis";
-    const questions = activeSet.questions || [];
-    const subject = activeSet.subject || "Chemistry"; // Fallback to Chemistry for ChemScan
+    const topic = reportSet.title || reportSet.topic || "Research Synthesis";
+    const questions = reportSet.questions || [];
+    const subject = reportSet.subject || "Chemistry"; // Fallback to Chemistry for ChemScan
 
     try {
       if (type === 'pdf') {
-        await generateQuestionsPDF(topic, questions, subject);
+        await generateQuestionsPDF(topic, questions, subject, reportSettings);
       } else {
-        await generateQuestionsDocx(topic, questions, subject);
+        await generateQuestionsDocx(topic, questions, subject, reportSettings);
       }
     } catch (error) {
       console.error("Export failed:", error);
+      toast.error("Export failed. Please try again.");
+    }
+  };
+
+  const handlePublish = async () => {
+    if (!user || !activeSet || isPublishing) return;
+
+    setIsPublishing(true);
+    try {
+      const idToken = await user.getIdToken();
+      const res = await fetch("/api/publish", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          bank: {
+            ...activeSet,
+            reportSettings,
+          },
+        }),
+      });
+
+      const payload = await res.json();
+      if (!res.ok) {
+        throw new Error(payload?.error || "Publish failed");
+      }
+
+      toast.success("Report published to community library");
+      setActiveSet((prev: any) => ({ ...prev, publishedId: payload.id, published: true }));
+    } catch (error: any) {
+      console.error("Publish failed:", error);
+      toast.error(error.message || "Publish failed");
+    } finally {
+      setIsPublishing(false);
     }
   };
 
@@ -112,9 +154,8 @@ export default function App() {
               setActiveTab("classrooms");
             }}
             onExport={(set, type) => {
-              // Store as active then export
               setActiveSet(set);
-              handleExport(type); 
+              handleExport(type, set); 
             }}
           />
         );
@@ -123,7 +164,10 @@ export default function App() {
           <ClassroomWindow 
             activeSet={activeSet}
             onExport={handleExport}
-            onShare={() => console.log("Sharing")}
+            onShare={handlePublish}
+            publishing={isPublishing}
+            reportSettings={reportSettings}
+            onReportSettingsChange={setReportSettings}
             onClose={() => setActiveTab("generator")}
           />
         );
