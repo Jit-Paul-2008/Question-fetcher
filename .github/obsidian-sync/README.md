@@ -30,3 +30,16 @@ Security note: PR creation uses the `gh` CLI if available; otherwise the script 
 
 Template notes
 - See `.github/obsidian-sync/templates` for example frontmatter templates for `decision`, `policy`, and `update` notes.
+
+Exporting notes from repo to your local Obsidian vault
+- To copy notes from the repo into your local vault, you can run:
+
+```bash
+./scripts/obsidian_export.sh /path/to/your/obsidian-vault
+```
+
+- This will copy all markdown files under `.github/obsidian-sync/notes` into the specified vault folder.
+
+Created note
+- A note with the Scan Question Yield Optimization Plan has been added at:
+	`.github/obsidian-sync/notes/SCAN_QUESTION_YIELD_OPTIMIZATION_PLAN.md`
