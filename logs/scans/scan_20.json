@@ -1,0 +1,348 @@
+{
+  "topicDetected": "Dry Topic",
+  "summary": "Dry summary",
+  "keywords": [
+    "dry"
+  ],
+  "questions": [
+    {
+      "text": "Dry question 1",
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "answer": "A",
+      "source": "Practice Dry Set",
+      "year": "2025",
+      "type": "Practice",
+      "targetExam": "DryExam",
+      "topic": "Dry Topic"
+    },
+    {
+      "text": "Dry question 2",
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "answer": "A",
+      "source": "Practice Dry Set",
+      "year": "2025",
+      "type": "Practice",
+      "targetExam": "DryExam",
+      "topic": "Dry Topic"
+    },
+    {
+      "text": "Dry question 3",
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "answer": "A",
+      "source": "Practice Dry Set",
+      "year": "2025",
+      "type": "Practice",
+      "targetExam": "DryExam",
+      "topic": "Dry Topic"
+    },
+    {
+      "text": "Dry question 4",
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "answer": "A",
+      "source": "Practice Dry Set",
+      "year": "2025",
+      "type": "Practice",
+      "targetExam": "DryExam",
+      "topic": "Dry Topic"
+    },
+    {
+      "text": "Dry question 5",
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "answer": "A",
+      "source": "Practice Dry Set",
+      "year": "2025",
+      "type": "Practice",
+      "targetExam": "DryExam",
+      "topic": "Dry Topic"
+    },
+    {
+      "text": "Dry question 6",
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "answer": "A",
+      "source": "Practice Dry Set",
+      "year": "2025",
+      "type": "Practice",
+      "targetExam": "DryExam",
+      "topic": "Dry Topic"
+    },
+    {
+      "text": "Dry question 7",
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "answer": "A",
+      "source": "Practice Dry Set",
+      "year": "2025",
+      "type": "Practice",
+      "targetExam": "DryExam",
+      "topic": "Dry Topic"
+    },
+    {
+      "text": "Dry question 8",
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "answer": "A",
+      "source": "Practice Dry Set",
+      "year": "2025",
+      "type": "Practice",
+      "targetExam": "DryExam",
+      "topic": "Dry Topic"
+    },
+    {
+      "text": "Dry question 9",
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "answer": "A",
+      "source": "Practice Dry Set",
+      "year": "2025",
+      "type": "Practice",
+      "targetExam": "DryExam",
+      "topic": "Dry Topic"
+    },
+    {
+      "text": "Dry question 10",
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "answer": "A",
+      "source": "Practice Dry Set",
+      "year": "2025",
+      "type": "Practice",
+      "targetExam": "DryExam",
+      "topic": "Dry Topic"
+    },
+    {
+      "text": "Dry question 11",
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "answer": "A",
+      "source": "Practice Dry Set",
+      "year": "2025",
+      "type": "Practice",
+      "targetExam": "DryExam",
+      "topic": "Dry Topic"
+    },
+    {
+      "text": "Dry question 12",
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "answer": "A",
+      "source": "Practice Dry Set",
+      "year": "2025",
+      "type": "Practice",
+      "targetExam": "DryExam",
+      "topic": "Dry Topic"
+    },
+    {
+      "text": "Dry question 13",
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "answer": "A",
+      "source": "Practice Dry Set",
+      "year": "2025",
+      "type": "Practice",
+      "targetExam": "DryExam",
+      "topic": "Dry Topic"
+    },
+    {
+      "text": "Dry question 14",
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "answer": "A",
+      "source": "Practice Dry Set",
+      "year": "2025",
+      "type": "Practice",
+      "targetExam": "DryExam",
+      "topic": "Dry Topic"
+    },
+    {
+      "text": "Dry question 15",
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "answer": "A",
+      "source": "Practice Dry Set",
+      "year": "2025",
+      "type": "Practice",
+      "targetExam": "DryExam",
+      "topic": "Dry Topic"
+    },
+    {
+      "text": "Dry question 16",
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "answer": "A",
+      "source": "Practice Dry Set",
+      "year": "2025",
+      "type": "Practice",
+      "targetExam": "DryExam",
+      "topic": "Dry Topic"
+    },
+    {
+      "text": "Dry question 17",
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "answer": "A",
+      "source": "Practice Dry Set",
+      "year": "2025",
+      "type": "Practice",
+      "targetExam": "DryExam",
+      "topic": "Dry Topic"
+    },
+    {
+      "text": "Dry question 18",
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "answer": "A",
+      "source": "Practice Dry Set",
+      "year": "2025",
+      "type": "Practice",
+      "targetExam": "DryExam",
+      "topic": "Dry Topic"
+    },
+    {
+      "text": "Dry question 19",
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "answer": "A",
+      "source": "Practice Dry Set",
+      "year": "2025",
+      "type": "Practice",
+      "targetExam": "DryExam",
+      "topic": "Dry Topic"
+    },
+    {
+      "text": "Dry question 20",
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "answer": "A",
+      "source": "Practice Dry Set",
+      "year": "2025",
+      "type": "Practice",
+      "targetExam": "DryExam",
+      "topic": "Dry Topic"
+    }
+  ],
+  "diagnostics": {
+    "geminiCalls": 2,
+    "tavilyRequests": 3,
+    "tavilyCredits": 9,
+    "metrics": {
+      "scan_start_ts": 1776084493119,
+      "timers": {
+        "search_start": 1776084493119,
+        "search_end": 1776084493120,
+        "structuring_start": 1776084493120,
+        "structuring_end": 1776084493120,
+        "rescue_start": 0,
+        "rescue_end": 0
+      },
+      "dedupe_rejections": 0,
+      "topup_attempts": 0,
+      "topup_added": 0,
+      "rescue_added": 0,
+      "json_repair_attempts": 0,
+      "initial_source_count": 0,
+      "rescue_seen_count": 0,
+      "final_unique_source_count": 0,
+      "rescue_type": "none",
+      "rescue_queries": [],
+      "rescue_used": false,
+      "top_domains": []
+    },
+    "usedQueries": [
+      "dry query 1",
+      "dry query 2",
+      "dry query 3"
+    ],
+    "usedDomains": [
+      "dry.example.com"
+    ],
+    "domainYield": {
+      "dry.example.com": 9
+    }
+  }
+}

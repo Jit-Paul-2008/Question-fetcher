@@ -30,6 +30,7 @@ import {
   TAVILY_SEARCH_DEPTH,
   USD_TO_INR,
 } from "./src/server/config/scanConfig.js";
+import fs from 'fs';
 
 // ─── Constants & Utilities ───────────────────────────────────────────────────
 const handleError = (res: any, error: any, context: string = "Server") => {
@@ -163,6 +164,9 @@ async function startServer() {
 
   // ─── Helper: verify Firebase ID token ────────────────────────────────────
   async function verifyToken(authHeader: string | undefined): Promise<string> {
+    if (String(process.env.DRY_RUN || "false").toLowerCase() === "true") {
+      return "dry-user";
+    }
     const token = authHeader?.split("Bearer ")[1];
     if (!token) throw new Error("AUTH_MISSING");
     try {
@@ -574,21 +578,25 @@ async function startServer() {
     }
 
     try {
-      // 3. Atomically check and deduct 1 credit
+      // 3. Atomically check and deduct 1 credit (skip in DRY_RUN)
       const profileRef = db.doc(`users/${uid}/profile/data`);
-      try {
-        await db.runTransaction(async (t) => {
-          const doc = await t.get(profileRef);
-          const credits = doc.exists ? (doc.data()?.credits || 0) : 0;
-          if (credits <= 0) throw new Error("INSUFFICIENT_CREDITS");
-          t.update(profileRef, { credits: credits - 1 });
-        });
-      } catch (err: any) {
-        if (err.message === "INSUFFICIENT_CREDITS") {
-          return res.status(402).json({ error: "Insufficient units. Please top up." });
+      if (String(process.env.DRY_RUN || "false").toLowerCase() !== "true") {
+        try {
+          await db.runTransaction(async (t) => {
+            const doc = await t.get(profileRef);
+            const credits = doc.exists ? (doc.data()?.credits || 0) : 0;
+            if (credits <= 0) throw new Error("INSUFFICIENT_CREDITS");
+            t.update(profileRef, { credits: credits - 1 });
+          });
+        } catch (err: any) {
+          if (err.message === "INSUFFICIENT_CREDITS") {
+            return res.status(402).json({ error: "Insufficient units. Please top up." });
+          }
+          console.error(`[Credits:Transaction:Fail] uid=${uid}`, err);
+          throw err;
         }
-        console.error(`[Credits:Transaction:Fail] uid=${uid}`, err);
-        throw err;
+      } else {
+        console.log('[DryRun] Skipping credit deduction (DRY_RUN=true)');
       }
 
       const { images, topic, subject, exams, targetClass } = req.body;
@@ -682,15 +690,86 @@ async function startServer() {
       }
       console.log(`[Cache:MISS] key=${cacheKey} topic="${topic}"`);
 
+      const DRY_RUN = String(process.env.DRY_RUN || "false").toLowerCase() === "true";
+
       const geminiKey = process.env.GEMINI_API_KEY;
       const tavilyKey = process.env.TAVILY_API_KEY;
-      if (!geminiKey || !tavilyKey) {
+      if (!DRY_RUN && (!geminiKey || !tavilyKey)) {
         console.error("Missing API Keys: GEMINI_API_KEY or TAVILY_API_KEY not found in environment.");
         return res.status(500).json({ error: "Server API keys not configured." });
       }
 
-      const ai = new GoogleGenAI({ apiKey: geminiKey });
-      const tv = tavily({ apiKey: tavilyKey });
+      let ai: any;
+      let tv: any;
+      if (DRY_RUN) {
+        console.log('[DryRun] Starting dry-run mode: AI and Tavily calls are stubbed.');
+        ai = {
+          models: {
+            generateContent: async (config: any) => {
+              const textParts: string[] = [];
+              if (config?.contents) {
+                const parts = Array.isArray(config.contents.parts) ? config.contents.parts : [config.contents];
+                for (const p of parts) {
+                  if (!p) continue;
+                  if (typeof p === 'string') textParts.push(p);
+                  else if (typeof p.text === 'string') textParts.push(p.text);
+                }
+              }
+              const joined = textParts.join('\n').toLowerCase();
+
+              // Analysis / query generation
+              if (joined.includes('brainstorm search queries') || joined.includes('generate 6 to 8 highly targeted search queries')) {
+                return { text: JSON.stringify({ topicDetected: 'Dry Topic', summary: 'Dry summary', keywords: ['dry'], searchQueries: [ 'dry query 1', 'dry query 2', 'dry query 3' ] }) };
+              }
+
+              // Rescue rewrite
+              if (joined.includes('you are rewriting search queries') || joined.includes('rewriting search queries')) {
+                return { text: JSON.stringify({ searchQueries: [ 'dry rescue query 1', 'dry rescue query 2', 'dry rescue query 3' ] }) };
+              }
+
+              // Structuring / generate questions
+              if (joined.includes('extract and organize') || joined.includes('generate between 25 and 35 questions') || joined.includes('create high-quality original practice questions')) {
+                const questions = [];
+                for (let i = 1; i <= 20; i++) {
+                  questions.push({ text: `Dry question ${i}`, options: ['A', 'B', 'C', 'D'], answer: 'A', source: 'Practice Dry Set', year: '2025', type: 'Practice', targetExam: 'DryExam', topic: 'Dry Topic' });
+                }
+                return { text: JSON.stringify({ questions }) };
+              }
+
+              // Top-up / rescue small generation
+              if (joined.includes('generate') && joined.includes('additional') && joined.includes('questions')) {
+                const questions = [];
+                for (let i = 1; i <= 6; i++) {
+                  questions.push({ text: `Dry topup question ${i}`, options: ['A', 'B', 'C', 'D'], answer: 'A', source: 'Practice Dry Topup', year: '2025', type: 'Practice', targetExam: 'DryExam', topic: 'Dry Topic' });
+                }
+                return { text: JSON.stringify({ questions }) };
+              }
+
+              // JSON repair fallback
+              if (joined.includes('you are a json repair utility')) {
+                return { text: JSON.stringify({ questions: [] }) };
+              }
+
+              // Default
+              return { text: JSON.stringify({ topicDetected: 'Dry Default', summary: 'Dry fallback', keywords: [], searchQueries: [ 'dry default query' ] }) };
+            }
+          }
+        };
+
+        tv = {
+          search: async (q: string, opts: any) => {
+            // Return a small set of fake results
+            const results = [];
+            for (let i = 1; i <= 3; i++) {
+              results.push({ url: `https://dry.example.com/doc${i}`, content: `Sample snippet for ${q} - doc ${i}`, usage: { credits: 1 } });
+            }
+            return { results, usage: { credits: results.length } };
+          }
+        };
+      } else {
+        ai = new GoogleGenAI({ apiKey: geminiKey });
+        tv = tavily({ apiKey: tavilyKey });
+      }
       let geminiCallCount = 0;
 
       const generateWithRetry = (config: any) =>
@@ -698,6 +777,36 @@ async function startServer() {
           geminiCallCount += 1;
           return ai.models.generateContent(config);
         });
+
+      // Tracking for adaptive rescue and domain prioritization
+      let usedQueries: string[] = [];
+      const usedDomains = new Set<string>();
+      const domainYield: Record<string, number> = {};
+
+      // Dry-run / instrumentation metrics (populated during a scan)
+      const metrics: any = {
+        scan_start_ts: Date.now(),
+        timers: {
+          search_start: 0,
+          search_end: 0,
+          structuring_start: 0,
+          structuring_end: 0,
+          rescue_start: 0,
+          rescue_end: 0,
+        },
+        dedupe_rejections: 0,
+        topup_attempts: 0,
+        topup_added: 0,
+        rescue_added: 0,
+        json_repair_attempts: 0,
+        initial_source_count: 0,
+        rescue_seen_count: 0,
+        final_unique_source_count: 0,
+        rescue_type: 'none',
+        rescue_queries: [],
+        rescue_used: false,
+        top_domains: [],
+      };
 
       const examMap: Record<string, string> = {
         "jee-mains": "JEE Mains", "jee-advanced": "JEE Advanced",
@@ -842,23 +951,48 @@ async function startServer() {
       const allSearchResults: any[] = [];
       let tavilyRequestCount = 0;
 
-      const runSearchBatch = async (batchQueries: string[], useDomains: boolean) => {
+      const runSearchBatch = async (batchQueries: string[], useDomains: boolean, overrideDomains?: string[]) => {
         if (batchQueries.length === 0) return;
+        // Track queries executed
+        usedQueries.push(...batchQueries);
+
+        const includeDomainsOpt = useDomains && ((overrideDomains && overrideDomains.length > 0) || domainScoped.length > 0)
+          ? (overrideDomains && overrideDomains.length > 0 ? overrideDomains : domainScoped)
+          : undefined;
+
         const tasks = batchQueries.map((q) =>
           tv.search(q, {
             searchDepth: TAVILY_SEARCH_DEPTH,
             maxResults: TAVILY_MAX_RESULTS,
-            ...(useDomains && domainScoped.length > 0 ? { includeDomains: domainScoped } : {}),
+            ...(includeDomainsOpt ? { includeDomains: includeDomainsOpt } : {}),
           }).catch((err) => {
-            console.error(`Tavily search failed: ${q}`, err.message);
+            console.error(`Tavily search failed: ${q}`, err?.message || err);
             return { results: [] };
           })
         );
+
         const batchResults = await Promise.all(tasks);
         allSearchResults.push(...batchResults);
         tavilyRequestCount += batchQueries.length;
+
+        // Update per-domain yield statistics
+        for (const sr of batchResults) {
+          for (const r of (sr.results || [])) {
+            const url = String(r?.url || "").trim();
+            if (!url) continue;
+            try {
+              const hostname = new URL(url).hostname.replace(/^www\./, "");
+              usedDomains.add(hostname);
+              domainYield[hostname] = (domainYield[hostname] || 0) + 1;
+            } catch (e) {
+              // ignore malformed URLs
+            }
+          }
+        }
       };
 
+      // MARK: search phase start
+      metrics.timers.search_start = Date.now();
       await runSearchBatch(queries, true);
 
       const countUniqueSources = (results: any[]) => {
@@ -893,7 +1027,13 @@ async function startServer() {
               `[Scan] low source coverage=${initialSourceCount}, running supplemental Tavily queries=${supplementalQueries.length}`
             );
             // Keep supplemental retrieval domain-scoped for the active context.
-            await runSearchBatch(supplementalQueries, true);
+            // Prioritize unseen/low-yield domains first to maximize new coverage.
+            const prioritizedDomains = domainScoped.slice().sort((a, b) => {
+              const aCount = domainYield[a] || 0;
+              const bCount = domainYield[b] || 0;
+              return aCount - bCount;
+            });
+            await runSearchBatch(supplementalQueries, true, prioritizedDomains.slice(0, 80));
           }
         }
       }
@@ -924,6 +1064,8 @@ async function startServer() {
         if (combined.length >= MAX_SOURCES_FOR_STRUCTURING || totalChars >= MAX_COMBINED_CHARS) break;
       }
       console.log(`[Scan] ${combined.length} unique sources found`);
+      // MARK: search phase end
+      metrics.timers.search_end = Date.now();
 
       // ── STEP 3: Gemini structures real questions from search results ──
       const structurePrompt = [
@@ -945,6 +1087,8 @@ async function startServer() {
         combined.length > 0 ? `Search Results:\n${combined.join("\n---\n")}` : "No search results available. Proceed with expert generation.",
       ].join("\n");
 
+      // MARK: structuring phase start
+      metrics.timers.structuring_start = Date.now();
       const structureResponse = await generateWithRetry({
           model: GEMINI_GENERATION_MODEL,
           contents: structurePrompt,
@@ -1040,6 +1184,7 @@ async function startServer() {
             structuredText.slice(0, 25000),
           ].join("\n");
 
+          metrics.json_repair_attempts += 1;
           const repaired = await generateWithRetry({
               model: GEMINI_GENERATION_MODEL,
               contents: repairPrompt,
@@ -1088,13 +1233,19 @@ async function startServer() {
         const normalized = normalizeQuestion(q);
         if (!normalized) continue;
         const normText = normalized.text.toLowerCase().replace(/\s+/g, " ").trim();
-        if (!normText || dedupeSet.has(normText)) continue;
+        if (!normText) continue;
+        if (dedupeSet.has(normText)) {
+          metrics.dedupe_rejections += 1;
+          continue;
+        }
         dedupeSet.add(normText);
         normalizedInitial.push(normalized);
       }
       structured.questions = normalizedInitial;
 
       console.log(`[Scan] Extracted ${structured.questions?.length || 0} unique questions`);
+      // MARK: structuring phase end
+      metrics.timers.structuring_end = Date.now();
 
       // Keep the enforced question floor with minimal-cost top-up.
       const MIN_QUESTIONS = 12;
@@ -1102,6 +1253,8 @@ async function startServer() {
       const TARGET_QUESTIONS = MIN_QUESTIONS;
 
       for (let attempt = 0; attempt < MAX_TOPUP_ATTEMPTS && (structured.questions?.length || 0) < TARGET_QUESTIONS; attempt += 1) {
+        // Track top-up attempts for diagnostics
+        metrics.topup_attempts += 1;
         const currentCount = structured.questions?.length || 0;
         const missingCount = TARGET_QUESTIONS - currentCount;
         const requestCount = Math.min(12, Math.max(6, missingCount + 2));
@@ -1170,6 +1323,7 @@ async function startServer() {
                 String(topUpResponse.text || "").slice(0, 20000),
               ].join("\n");
 
+              metrics.json_repair_attempts += 1;
               const repaired = await generateWithRetry({
                 model: GEMINI_GENERATION_MODEL,
                 contents: repairPrompt,
@@ -1215,9 +1369,14 @@ async function startServer() {
             const normalized = normalizeQuestion(raw);
             if (!normalized) continue;
             const normText = normalized.text.toLowerCase().replace(/\s+/g, " ").trim();
-            if (!normText || dedupeSet.has(normText)) continue;
+            if (!normText) continue;
+            if (dedupeSet.has(normText)) {
+              metrics.dedupe_rejections += 1;
+              continue;
+            }
             dedupeSet.add(normText);
             structured.questions.push(normalized);
+            metrics.topup_added += 1;
             if (structured.questions.length >= TARGET_QUESTIONS) break;
           }
         } catch (topUpErr) {
@@ -1229,12 +1388,67 @@ async function startServer() {
         // If domain-scoped retrieval was insufficient, do one open-web rescue pass
         // before failing the scan.
         const missingCount = MIN_QUESTIONS - (structured.questions?.length || 0);
-        const rescueQueries = Array.from(new Set([
-          `${subjectLabel} ${primaryExam} ${topicSeed} previous year MCQ with solutions`,
-          `${subjectLabel} ${topicSeed} assertion reason questions with answers`,
-          `${subjectLabel} ${targetClass || "12"} ${topicSeed} important questions`,
-          `${subjectLabel} ${allExams} ${topicSeed} sample paper solved questions`,
-        ])).slice(0, 3);
+
+        // Attempt to generate a non-repetitive rescue query set via Gemini
+        let rescueQueries: string[] = [];
+        try {
+          const rewritePrompt = [
+            `You are rewriting search queries to FIND additional real exam questions for the given topic.`,
+            `Subject: ${subjectLabel}`,
+            `Topic: ${analysis.topicDetected || topicSeed}`,
+            `Exams: ${allExams}`,
+            "Goal: produce up to 3 concise, high-yield search queries that prioritize unseen or low-yield domains.",
+            "Constraints:",
+            "- Do NOT repeat the existing query templates.",
+            "- Prioritize domains not seen in the current scan; de-prioritize domains with low yield.",
+            "- Return only JSON in the format: { searchQueries: [ ... ] }",
+            "- Do NOT include URLs.",
+            "Existing executed queries (last 20):",
+            (usedQueries.slice(-20).join("\n") || "None"),
+            "Seen domains (sample):",
+            (Array.from(usedDomains).slice(0, 20).join(", ") || "None"),
+            `Per-domain yields: ${JSON.stringify(domainYield)}`,
+          ].join("\n");
+
+          const rewriteResp = await generateWithRetry({
+            model: GEMINI_GENERATION_MODEL,
+            contents: { parts: [{ text: rewritePrompt }] },
+            config: {
+              maxOutputTokens: 1024,
+              temperature: 0.2,
+              responseMimeType: "application/json",
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  searchQueries: { type: Type.ARRAY, items: { type: Type.STRING } },
+                },
+                required: ["searchQueries"],
+              },
+            },
+          });
+
+          try {
+            const parsed = JSON.parse(rewriteResp.text || "{}");
+            if (Array.isArray(parsed.searchQueries)) {
+              rescueQueries = parsed.searchQueries.map((s: any) => String(s || "").trim()).filter((s: string) => s.length > 0).slice(0, 3);
+            }
+          } catch (e) {
+            // fall through to fallback
+          }
+        } catch (err) {
+          console.warn("[Scan:RescueRewrite] Could not generate rescue queries", err?.message || err);
+          rescueQueries = [];
+        }
+
+        // Fallback to conservative rescue queries if rewrite failed
+        if (!Array.isArray(rescueQueries) || rescueQueries.length === 0) {
+          rescueQueries = Array.from(new Set([
+            `${subjectLabel} ${primaryExam} ${topicSeed} previous year MCQ with solutions`,
+            `${subjectLabel} ${topicSeed} assertion reason questions with answers`,
+            `${subjectLabel} ${targetClass || "12"} ${topicSeed} important questions`,
+            `${subjectLabel} ${allExams} ${topicSeed} sample paper solved questions`,
+          ])).slice(0, 3);
+        }
 
         console.log(
           `[Scan:Rescue] Question floor miss=${structured.questions?.length || 0}. Running open-web rescue queries=${rescueQueries.length}`
@@ -1246,11 +1460,27 @@ async function startServer() {
               searchDepth: "basic",
               maxResults: Math.min(20, Math.max(TAVILY_MAX_RESULTS, 12)),
             }).catch((err) => {
-              console.error(`[Scan:Rescue] Tavily failed for query=${q}`, err.message);
+              console.error(`[Scan:Rescue] Tavily failed for query=${q}`, err?.message || err);
               return { results: [] };
             })
           )
         );
+
+        // Track rescue queries as used and update per-domain yields
+        usedQueries.push(...rescueQueries);
+        for (const sr of rescueResults) {
+          for (const r of (sr.results || [])) {
+            const url = String(r?.url || "").trim();
+            if (!url) continue;
+            try {
+              const hostname = new URL(url).hostname.replace(/^www\./, "");
+              usedDomains.add(hostname);
+              domainYield[hostname] = (domainYield[hostname] || 0) + 1;
+            } catch (e) {
+              // ignore malformed urls
+            }
+          }
+        }
 
         tavilyRequestCount += rescueQueries.length;
         tavilyCreditsUsed += rescueResults.reduce((sum, sr) => {
@@ -1417,6 +1647,30 @@ async function startServer() {
         questions: structured.questions || [],
       };
 
+      // When in DRY_RUN, include diagnostics and internal metrics for easier local metrics collection
+      if (String(process.env.DRY_RUN || "false").toLowerCase() === "true") {
+        try {
+          (finalResult as any).diagnostics = {
+            geminiCalls: geminiCallCount,
+            tavilyRequests: tavilyRequestCount,
+            tavilyCredits: tavilyCreditsUsed || 0,
+            // include the internal metrics object and useful tracking vars
+            metrics,
+            usedQueries,
+            usedDomains: Array.from(usedDomains || []),
+            domainYield: domainYield || {},
+          };
+        } catch (e) {
+          // best-effort: don't fail the request if diagnostics serialization trips
+          (finalResult as any).diagnostics = {
+            geminiCalls: geminiCallCount,
+            tavilyRequests: tavilyRequestCount,
+            tavilyCredits: tavilyCreditsUsed || 0,
+            diagnostics_error: String(e?.message || e),
+          };
+        }
+      }
+
       console.log(
         `[Scan:Cost] uid=${uid} geminiCalls=${geminiCallCount} tavilyRequests=${tavilyRequestCount} tavilyCredits=${tavilyCreditsUsed} depth=${TAVILY_SEARCH_DEPTH} maxQueries=${effectiveQueryCap} budgetInr=${MAX_SCAN_COST_INR.toFixed(2)} estInrPerReq=${estimatedInrPerRequest.toFixed(2)}`
       );
@@ -1433,6 +1687,7 @@ async function startServer() {
         isCacheHit: false
       });
 
+      console.log('[Scan:DiagKeys]', Object.keys(finalResult));
       res.json(finalResult);
 
       // ─── SAVE TO CACHE (Hybrid Firestore + Pinecone) ─────────────────────
