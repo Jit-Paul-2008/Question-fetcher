@@ -1687,7 +1687,6 @@ async function startServer() {
         isCacheHit: false
       });
 
-      console.log('[Scan:DiagKeys]', Object.keys(finalResult));
       res.json(finalResult);
 
       // ─── SAVE TO CACHE (Hybrid Firestore + Pinecone) ─────────────────────
