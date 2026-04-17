@@ -5,14 +5,12 @@ import { AuthWindow } from "./components/windows/AuthWindow";
 import { GeneratorWindow } from "./components/windows/GeneratorWindow";
 import { LibraryWindow } from "./components/windows/LibraryWindow";
 import { ClassroomWindow } from "./components/windows/ClassroomWindow";
-import { KnowledgeMapWindow } from "./components/windows/KnowledgeMapWindow";
 import { BuyModal } from "./components/modals/BuyModal";
 
 // Redesigned Hooks
 import { useAuth } from "./hooks/useAuth";
 import { useScanner } from "./hooks/useScanner";
 import { useLibrary } from "./hooks/useLibrary";
-import { useClassrooms } from "./hooks/useClassrooms";
 import { usePayments } from "./hooks/usePayments";
 
 // Export Utilities
@@ -27,7 +25,6 @@ export default function App() {
   const [theme, setTheme] = useState<Theme>("light");
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [activeSet, setActiveSet] = useState<any>(null);
-  const [isPublishing, setIsPublishing] = useState(false);
   const [reportSettings, setReportSettings] = useState<ReportSettings>({
     includeAnswers: true,
     brandLabel: "Question Fetcher",
@@ -37,8 +34,7 @@ export default function App() {
   const { user, loading: authLoading, error: authError, credits, setCredits, login, register, googleLogin, logout, refreshProfile } = useAuth();
   const { buyCredits } = usePayments(user, setCredits, refreshProfile);
   const { status, progress, scanFile, scanTopics, result, reset: resetScanner } = useScanner(user, credits, setCredits);
-  const { history, communityReports, loading: historyLoading, communityLoading, refreshHistory, refreshCommunityReports } = useLibrary(user, !authLoading);
-  const { myClassrooms, joinedClasses, isCroomsLoading, joinClassroom, createClassroom } = useClassrooms(user, !authLoading);
+  const { history, loading: historyLoading, refreshHistory } = useLibrary(user, !authLoading);
 
   // Theme Sync
   useEffect(() => {
@@ -50,7 +46,7 @@ export default function App() {
     if (result && status === "success") {
       setActiveSet(result);
       setReportSettings(result.reportSettings || { includeAnswers: true, brandLabel: "Question Fetcher" });
-      setActiveTab("classrooms");
+      setActiveTab("results");
       refreshHistory();
       // Also refresh profile to update credits from backend
       if (refreshProfile) refreshProfile();
@@ -77,42 +73,6 @@ export default function App() {
     } catch (error) {
       console.error("Export failed:", error);
       toast.error("Export failed. Please try again.");
-    }
-  };
-
-  const handlePublish = async () => {
-    if (!user || !activeSet || isPublishing) return;
-
-    setIsPublishing(true);
-    try {
-      const idToken = await user.getIdToken();
-      const res = await fetch("/api/publish", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${idToken}`,
-        },
-        body: JSON.stringify({
-          bank: {
-            ...activeSet,
-            reportSettings,
-          },
-        }),
-      });
-
-      const payload = await res.json();
-      if (!res.ok) {
-        throw new Error(payload?.error || "Publish failed");
-      }
-
-      toast.success("Report published to community library");
-      setActiveSet((prev: any) => ({ ...prev, publishedId: payload.id, published: true }));
-      refreshCommunityReports();
-    } catch (error: any) {
-      console.error("Publish failed:", error);
-      toast.error(error.message || "Publish failed");
-    } finally {
-      setIsPublishing(false);
     }
   };
 
@@ -148,17 +108,15 @@ export default function App() {
             progress={progress}
           />
         );
-      case "library":
+      case "history":
         return (
           <LibraryWindow 
             history={history}
-            communityReports={communityReports}
             loading={historyLoading}
-            communityLoading={communityLoading}
             onSelect={(set) => {
               setActiveSet(set);
               setReportSettings(set.reportSettings || { includeAnswers: true, brandLabel: "Question Fetcher" });
-              setActiveTab("classrooms");
+              setActiveTab("results");
             }}
             onExport={(set, type) => {
               setActiveSet(set);
@@ -167,20 +125,16 @@ export default function App() {
             }}
           />
         );
-      case "classrooms":
+      case "results":
         return (
           <ClassroomWindow 
             activeSet={activeSet}
             onExport={handleExport}
-            onShare={handlePublish}
-            publishing={isPublishing}
             reportSettings={reportSettings}
             onReportSettingsChange={setReportSettings}
             onClose={() => setActiveTab("generator")}
           />
         );
-      case "map":
-        return <KnowledgeMapWindow activeSet={activeSet} />;
       default:
         return (
           <div className="p-24 text-center opacity-20 text-[10px] font-black uppercase tracking-[0.5em]">

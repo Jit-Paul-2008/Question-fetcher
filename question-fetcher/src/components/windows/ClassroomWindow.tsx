@@ -8,7 +8,6 @@ import {
   FileDown,
   Hash,
   History,
-  Send,
   Sparkles,
   Target,
   Bookmark,
@@ -19,9 +18,7 @@ import type { ReportSettings } from "../../lib/types";
 interface ClassroomWindowProps {
   activeSet: any;
   onExport: (type: "pdf" | "docx") => void;
-  onShare: () => void;
   onClose: () => void;
-  publishing?: boolean;
   reportSettings: ReportSettings;
   onReportSettingsChange: (settings: ReportSettings) => void;
 }
@@ -29,9 +26,7 @@ interface ClassroomWindowProps {
 export function ClassroomWindow({
   activeSet,
   onExport,
-  onShare,
   onClose,
-  publishing = false,
   reportSettings,
   onReportSettingsChange,
 }: ClassroomWindowProps) {
@@ -117,14 +112,6 @@ export function ClassroomWindow({
           >
             <FileDown className="w-4 h-4" />
             <span>DOCX</span>
-          </button>
-          <button
-            onClick={onShare}
-            disabled={publishing}
-            className="flex items-center gap-3 px-5 py-3 bg-white/5 border border-white/5 hover:border-white/10 rounded-[1.2rem] text-white/80 hover:text-white transition-all shadow-sm font-black text-[11px] uppercase tracking-widest disabled:opacity-60"
-          >
-            <Send className="w-4 h-4" />
-            <span>{publishing ? "Publishing..." : "Publish"}</span>
           </button>
         </div>
       </div>

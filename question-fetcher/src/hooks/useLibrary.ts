@@ -23,9 +23,7 @@ function normalizeHistoryItem(doc: any): HistoryItem {
 
 export function useLibrary(user: User | null, isAuthReady: boolean) {
   const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [communityReports, setCommunityReports] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [communityLoading, setCommunityLoading] = useState(false);
 
   useEffect(() => {
     if (!isAuthReady || !user) {
@@ -37,21 +35,6 @@ export function useLibrary(user: User | null, isAuthReady: boolean) {
       setHistory(snap.docs.map(normalizeHistoryItem));
     });
   }, [user, isAuthReady]);
-
-  const refreshCommunityReports = async () => {
-    setCommunityLoading(true);
-    try {
-      const res = await fetch("/api/community-library");
-      if (!res.ok) throw new Error("Failed to load community reports");
-      const data = await res.json();
-      setCommunityReports((data.banks || []).map(normalizeHistoryItem));
-    } catch (error) {
-      console.error("Community library refresh error:", error);
-      setCommunityReports([]);
-    } finally {
-      setCommunityLoading(false);
-    }
-  };
 
   const refreshHistory = async () => {
     if (!user) return;
@@ -72,9 +55,5 @@ export function useLibrary(user: User | null, isAuthReady: boolean) {
     }
   };
 
-  useEffect(() => {
-    refreshCommunityReports();
-  }, []);
-
-  return { history, communityReports, loading, communityLoading, refreshHistory, refreshCommunityReports };
+  return { history, loading, refreshHistory };
 }

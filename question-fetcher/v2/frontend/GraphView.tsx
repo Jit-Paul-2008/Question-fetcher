@@ -23,11 +23,11 @@ interface GraphData {
 }
 
 const SUBJECT_COLORS: Record<string, string> = {
-  "Chemistry": "#d4af37", // Gold
-  "Physics": "#34d399",    // Emerald
-  "Biology": "#b45309",    // Amber/Bronze
-  "Maths": "#6366f1",      // Indigo
-  "General": "#94a3b8"     // Slate
+  "Chemistry": "#d4af37",
+  "Physics": "#34d399",
+  "Biology": "#b45309",
+  "Maths": "#6366f1",
+  "General": "#94a3b8"
 };
 
 export default function GraphView() {
@@ -40,8 +40,7 @@ export default function GraphView() {
       try {
         const res = await fetch('/api/graph-data');
         const json = await res.json();
-        
-        // Enhance nodes with colors
+
         const enhancedNodes = json.nodes.map((n: any) => ({
           ...n,
           color: SUBJECT_COLORS[n.subject] || SUBJECT_COLORS["General"]
@@ -86,7 +85,7 @@ export default function GraphView() {
                 <div className="calligraphy text-2xl text-royal-gold opacity-60 lowercase pr-4">universal sync</div>
               </div>
             </CardHeader>
-            
+
             <div className="w-full h-[650px] cursor-grab active:cursor-grabbing">
               <ForceGraph2D
                 ref={graphRef}
@@ -108,8 +107,7 @@ export default function GraphView() {
                 }}
               />
             </div>
-            
-            {/* Legend */}
+
             <div className="absolute bottom-8 left-8 flex flex-wrap gap-6 glass-dark p-4 px-6 rounded-royal-2xl z-10 border border-royal-border-gold/30">
               {Object.entries(SUBJECT_COLORS).map(([sub, color]) => (
                 <div key={sub} className="flex items-center gap-2.5">
@@ -148,10 +146,10 @@ export default function GraphView() {
               *Connections represent a cross-user semantic similarity score validated by the vector database.
             </p>
           </Card>
-          
+
           <div className="glass bg-primary p-8 rounded-royal-3xl text-primary-foreground shadow-2xl relative overflow-hidden group">
             <div className="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-110 transition-transform duration-700">
-               <FlaskConical className="w-32 h-32" />
+              <FlaskConical className="w-32 h-32" />
             </div>
             <h3 className="font-bold text-xs mb-3 uppercase tracking-[0.2em] opacity-80">Semantic Density</h3>
             <p className="text-base font-medium leading-relaxed">

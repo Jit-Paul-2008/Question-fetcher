@@ -21,11 +21,11 @@ interface GraphData {
 }
 
 const NEON_COLORS: Record<string, string> = {
-  "Chemistry": "#00fff2", // Neon Cyan
-  "Physics": "#b870ff",    // Neon Violet
-  "Biology": "#00ff88",    // Neon Green
-  "Maths": "#ff0088",      // Neon Pink
-  "General": "#ffffff"     // White
+  "Chemistry": "#00fff2",
+  "Physics": "#b870ff",
+  "Biology": "#00ff88",
+  "Maths": "#ff0088",
+  "General": "#ffffff"
 };
 
 export function KnowledgeMapWindow() {
@@ -41,48 +41,39 @@ export function KnowledgeMapWindow() {
       while (retries > 0) {
         try {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout
-          
+          const timeoutId = setTimeout(() => controller.abort(), 8000);
+
           const res = await fetch('/api/graph-data', { signal: controller.signal });
           clearTimeout(timeoutId);
-          
+
           if (!res.ok) {
             throw new Error(`Graph API returned ${res.status}: ${res.statusText}`);
           }
-          
+
           const json = await res.json();
-          
+
           if (!json.nodes || !json.links) {
             throw new Error('Invalid graph data structure: missing nodes or links');
           }
 
-          // Validation passed, proceed
           const enhancedNodes = json.nodes.map((n: any) => ({
             ...n,
             color: NEON_COLORS[n.group] || NEON_COLORS["General"]
           }));
 
           setData({ nodes: enhancedNodes, links: json.links });
-          
-          // Log successful fetch for observability
-          console.debug('[KnowledgeMap] Graph data fetched successfully', { nodeCount: json.nodes.length, linkCount: json.links.length });
           setLoading(false);
           return;
         } catch (err) {
           lastError = err instanceof Error ? err : new Error(String(err));
           retries--;
-          console.warn(`[KnowledgeMap] Fetch attempt failed (${4 - retries}/3):`, lastError.message);
-          
           if (retries > 0) {
-            await new Promise(r => setTimeout(r, 1000 * (4 - retries))); // Exponential backoff
+            await new Promise(r => setTimeout(r, 1000 * (4 - retries)));
           }
         }
       }
 
-      // All retries exhausted, show error state
       console.error('[KnowledgeMap] Failed to load graph data after 3 retries:', lastError);
-        
-      // Set error state (optional: render error UI with retry button)
       setData({ nodes: [], links: [] });
       setLoading(false);
     };
@@ -94,8 +85,8 @@ export function KnowledgeMapWindow() {
     return (
       <div className="flex flex-col items-center justify-center h-[600px] synth-glass rounded-[3rem] border border-white/5 mx-auto max-w-7xl">
         <div className="relative">
-            <Loader2 className="w-12 h-12 text-neon-cyan animate-spin mb-4" />
-            <div className="absolute inset-0 bg-neon-cyan/20 blur-xl rounded-full" />
+          <Loader2 className="w-12 h-12 text-neon-cyan animate-spin mb-4" />
+          <div className="absolute inset-0 bg-neon-cyan/20 blur-xl rounded-full" />
         </div>
         <p className="text-white/40 text-[10px] font-black uppercase tracking-[0.5em] animate-pulse">Initializing Neural Link...</p>
       </div>
@@ -107,22 +98,21 @@ export function KnowledgeMapWindow() {
       <div className="flex flex-col xl:flex-row gap-8 items-stretch">
         <div className="w-full xl:w-[75%]">
           <div className="synth-glass rounded-[2.5rem] border border-white/5 overflow-hidden relative min-h-[750px] bg-zinc-900/10 shadow-2xl">
-            {/* Overlay UI */}
             <div className="absolute top-10 left-10 z-20 space-y-2 pointer-events-none">
-                <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-white/5 border border-white/10 text-white rounded-2xl flex items-center justify-center shadow-2xl group">
-                        <Box className="w-6 h-6 group-hover:text-neon-cyan transition-colors" />
-                    </div>
-                    <div>
-                        <h2 className="text-3xl font-black text-white italic tracking-tight uppercase">Knowledge Universe</h2>
-                        <div className="flex items-center gap-2">
-                             <div className="w-1.5 h-1.5 rounded-full bg-neon-cyan shadow-[0_0_8px_rgba(0,255,242,0.8)]" />
-                             <p className="text-white/30 text-[9px] font-black uppercase tracking-[0.2em]">Semantic_Neural_Network_v4.2</p>
-                        </div>
-                    </div>
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-white/5 border border-white/10 text-white rounded-2xl flex items-center justify-center shadow-2xl group">
+                  <Box className="w-6 h-6 group-hover:text-neon-cyan transition-colors" />
                 </div>
+                <div>
+                  <h2 className="text-3xl font-black text-white italic tracking-tight uppercase">Knowledge Universe</h2>
+                  <div className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-neon-cyan shadow-[0_0_8px_rgba(0,255,242,0.8)]" />
+                    <p className="text-white/30 text-[9px] font-black uppercase tracking-[0.2em]">Semantic_Neural_Network_v4.2</p>
+                  </div>
+                </div>
+              </div>
             </div>
-            
+
             <div className="w-full h-[750px] cursor-grab active:cursor-grabbing bg-[#050505]/50">
               <ForceGraph2D
                 ref={graphRef}
@@ -147,8 +137,7 @@ export function KnowledgeMapWindow() {
                 }}
               />
             </div>
-            
-            {/* Legend */}
+
             <div className="absolute bottom-10 left-10 right-10 flex flex-wrap gap-5 bg-black/40 backdrop-blur-xl p-6 px-10 rounded-2xl z-20 border border-white/5 shadow-2xl justify-center xl:justify-start">
               {Object.entries(NEON_COLORS).map(([sub, color]) => (
                 <div key={sub} className="flex items-center gap-3">
@@ -162,11 +151,11 @@ export function KnowledgeMapWindow() {
 
         <div className="w-full xl:w-[25%] flex flex-col gap-8">
           <div className="synth-glass rounded-[2rem] border border-white/5 p-10 relative overflow-hidden bg-white/5 flex-grow group">
-             <div className="absolute top-0 right-0 w-32 h-32 bg-neon-cyan/5 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity" />
-            
+            <div className="absolute top-0 right-0 w-32 h-32 bg-neon-cyan/5 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity" />
+
             <div className="flex items-center gap-3 mb-10 border-b border-white/5 pb-6">
-                <Activity className="w-4 h-4 text-neon-cyan" />
-                <h3 className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em]">Map Core Metrics</h3>
+              <Activity className="w-4 h-4 text-neon-cyan" />
+              <h3 className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em]">Map Core Metrics</h3>
             </div>
 
             <div className="space-y-12">
@@ -188,25 +177,25 @@ export function KnowledgeMapWindow() {
             </div>
 
             <div className="mt-auto pt-12 space-y-4">
-                 <div className="p-4 bg-black/40 rounded-xl border border-white/5 text-[9px] font-mono text-white/20 leading-relaxed uppercase tracking-wider italic">
-                    *Density nodes indicate semantic proximity within the vector space.
-                 </div>
+              <div className="p-4 bg-black/40 rounded-xl border border-white/5 text-[9px] font-mono text-white/20 leading-relaxed uppercase tracking-wider italic">
+                *Density nodes indicate semantic proximity within the vector space.
+              </div>
             </div>
           </div>
-          
+
           <div className="relative group overflow-hidden rounded-[2rem] p-1 shadow-2xl">
             <div className="absolute inset-0 bg-gradient-to-br from-neon-cyan via-neon-violet to-neon-cyan animate-spin-slow opacity-20" />
             <div className="bg-black rounded-[23px] p-10 relative z-10 space-y-4 flex flex-col items-center text-center">
-                 <div className="p-4 bg-white/5 rounded-2xl border border-white/10 mb-2">
-                    <Database className="w-6 h-6 text-neon-cyan" />
-                 </div>
-                 <h4 className="text-[11px] font-black text-white uppercase tracking-[0.3em]">Cluster Sync</h4>
-                 <p className="text-[10px] text-white/40 font-bold leading-relaxed italic">
-                    Real-time synchronization with the decentralized knowledge repository.
-                 </p>
-                 <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden mt-4">
-                    <div className="w-[85%] h-full bg-neon-cyan shadow-[0_0_10px_rgba(0,255,242,0.8)]" />
-                 </div>
+              <div className="p-4 bg-white/5 rounded-2xl border border-white/10 mb-2">
+                <Database className="w-6 h-6 text-neon-cyan" />
+              </div>
+              <h4 className="text-[11px] font-black text-white uppercase tracking-[0.3em]">Cluster Sync</h4>
+              <p className="text-[10px] text-white/40 font-bold leading-relaxed italic">
+                Real-time synchronization with the decentralized knowledge repository.
+              </p>
+              <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden mt-4">
+                <div className="w-[85%] h-full bg-neon-cyan shadow-[0_0_10px_rgba(0,255,242,0.8)]" />
+              </div>
             </div>
           </div>
         </div>
@@ -214,4 +203,3 @@ export function KnowledgeMapWindow() {
     </div>
   );
 }
-

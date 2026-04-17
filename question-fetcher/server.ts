@@ -1,24 +1,22 @@
-import "dotenv/config";
+import fs from "fs";
+import dotenv from "dotenv";
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import cors from "cors";
 import crypto from "crypto";
-import { spawn } from 'child_process';
 import { GoogleGenAI, Type } from "@google/genai";
 import { tavily } from "@tavily/core";
 import admin from "firebase-admin";
 import { getFirestore } from "firebase-admin/firestore";
 import Razorpay from "razorpay";
 import mammoth from "mammoth";
-import { Pinecone } from "@pinecone-database/pinecone";
 import { verifyTextInProcess } from "./src/server/verifier/inProcessVerifier.js";
 import { getCacheKey, getIncludeDomains } from "./src/server/scan/helpers.js";
 import {
   CACHE_MAX_AGE_MS,
   CACHE_MIN_QUESTIONS,
   GEMINI_COST_BUFFER_INR,
-  GEMINI_EMBEDDING_MODEL,
   GEMINI_GENERATION_MODEL,
   MAX_SCAN_COST_INR,
   MAX_TAVILY_QUERIES,
@@ -30,21 +28,81 @@ import {
   TAVILY_SEARCH_DEPTH,
   USD_TO_INR,
 } from "./src/server/config/scanConfig.js";
-import fs from 'fs';
+
+// Load env from the app folder first, then the workspace root.
+const ENV_PATH_CANDIDATES = [
+  path.resolve(process.cwd(), ".env"),
+  path.resolve(process.cwd(), "..", ".env"),
+];
+
+let loadedEnvPath = "";
+for (const envPath of ENV_PATH_CANDIDATES) {
+  if (!fs.existsSync(envPath)) continue;
+  dotenv.config({ path: envPath, override: false });
+  loadedEnvPath = envPath;
+  break;
+}
+
+if (!loadedEnvPath) {
+  dotenv.config();
+}
 
 // ─── Constants & Utilities ───────────────────────────────────────────────────
-const handleError = (res: any, error: any, context: string = "Server") => {
-  console.error(`[${context}:Error]`, error);
-  const message = error.message || "An unexpected error occurred";
-  const status = error.status || 500;
-  res.status(status).json({ error: message, context });
-};
+const UPSTREAM_BUSY_MESSAGE = "Gemini or search provider is currently busy (503). Please try again in a few minutes.";
+
+function isPlaceholderSecret(value: string | undefined): boolean {
+  const raw = String(value || "").trim();
+  if (!raw) return true;
+  const lowered = raw.toLowerCase();
+  return (
+    lowered.includes("your_") ||
+    lowered.includes("_here") ||
+    lowered === "changeme" ||
+    lowered === "replace_me" ||
+    lowered === "replace-me"
+  );
+}
+
+function isUpstreamUnavailableError(error: any): boolean {
+  const msg = String(error?.message || "").toLowerCase();
+  return (
+    error?.status === 503 ||
+    error?.code === 503 ||
+    msg.includes("503") ||
+    msg.includes("unavailable") ||
+    msg.includes("high demand") ||
+    msg.includes("overloaded")
+  );
+}
+
+function normalizeMathText(value: string): string {
+  let out = String(value || "");
+  out = out.replace(/\\\(|\\\)|\$\$/g, "").replace(/\$/g, "");
+  out = out.replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, "($1)/($2)");
+  out = out.replace(/\\sqrt\{([^{}]+)\}/g, "sqrt($1)");
+  out = out.replace(/\\cdot/g, "*");
+  out = out.replace(/\\times/g, "x");
+  out = out.replace(/\\pi/g, "pi");
+  out = out.replace(/\\alpha/g, "alpha");
+  out = out.replace(/\\beta/g, "beta");
+  out = out.replace(/\\gamma/g, "gamma");
+  out = out.replace(/\\rightarrow/g, "->");
+  out = out.replace(/\\geq/g, ">=");
+  out = out.replace(/\\leq/g, "<=");
+  out = out.replace(/\\neq/g, "!=");
+  out = out.replace(/\{\s*/g, "").replace(/\s*\}/g, "");
+  out = out.replace(/\\[a-zA-Z]+/g, " ");
+  return out.replace(/\s+/g, " ").trim();
+}
+
 async function saveToUserHistory(uid: string, result: any, metadata: any) {
   try {
     const historyRef = db.collection(`users/${uid}/history`);
     await historyRef.add({
       ...result,
       ...metadata,
+      topicName: result.topicDetected || result.topic || "Untitled",
+      questionCount: Array.isArray(result.questions) ? result.questions.length : 0,
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
     });
     console.log(`[History:Saved] uid=${uid} topic=${result.topicDetected}`);
@@ -73,77 +131,11 @@ const FREE_WELCOME_CREDITS = 3;
 
 // ─── Razorpay client (Use getRazorpay() instead) ──────────────────────────
 
-// ─── Pinecone & Embedding Init ──────────────────────────────────────────────
-// ─── Pinecone & Embedding Init (Defensive for startup) ────────────────────────
-let pc: Pinecone | null = null;
-let pcIndex: any = null;
-
-function getPinecone() {
-  if (!pc) {
-    const apiKey = process.env.PINECONE_API_KEY;
-    if (!apiKey) {
-      console.warn("[Pinecone:Warn] PINECONE_API_KEY not found in environment.");
-      return null;
-    }
-    pc = new Pinecone({ apiKey });
-  }
-  return pc;
-}
-
-function getPineconeIndex() {
-  const client = getPinecone();
-  if (client && !pcIndex) {
-    pcIndex = client.index("chemscan");
-  }
-  return pcIndex;
-}
-
-const genAIEmbed = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "DUMMY_KEY" });
-
-async function getTopicEmbedding(text: string) {
-  if (!GEMINI_EMBEDDING_MODEL) return null;
-  try {
-    const response = await withRetry(() => 
-      genAIEmbed.models.embedContent({
-        model: GEMINI_EMBEDDING_MODEL,
-        contents: [{ parts: [{ text }] }],
-        config: { outputDimensionality: 768 }
-      })
-    );
-    return response.embeddings?.[0]?.values || null;
-  } catch (err) {
-    console.error("[Embedding:Error]", err);
-    return null;
-  }
-}
-
 function getRazorpay() {
   const keyId = process.env.RAZORPAY_KEY_ID;
   const keySecret = process.env.RAZORPAY_KEY_SECRET;
   if (!keyId || !keySecret) throw new Error("Razorpay keys not configured");
   return new Razorpay({ key_id: keyId, key_secret: keySecret });
-}
-
-// ─── Retry Helper for AI Calls ───────────────────────────────────────────────
-async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 2000): Promise<T> {
-  let lastError: any;
-  for (let i = 0; i < retries; i++) {
-    try {
-      return await fn();
-    } catch (err: any) {
-      lastError = err;
-      // Check for 503 or overload messages
-      const is503 = err.message?.includes("503") || err.status === 503 || err.code === 503 || err.message?.includes("high demand") || err.message?.includes("UNAVAILABLE");
-      if (is503 && i < retries - 1) {
-        console.warn(`[Retry] Gemini busy/503. Retrying in ${delay}ms... (Attempt ${i + 1}/${retries})`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        delay *= 2;
-        continue;
-      }
-      throw err;
-    }
-  }
-  throw lastError;
 }
 
 async function startServer() {
@@ -426,32 +418,7 @@ async function startServer() {
     }
   });
 
-  // ─── COMMUNITY LIBRARY: Publish ───────────────────────────────────────────
-  app.post("/api/publish", async (req, res) => {
-    try {
-      const uid = await verifyToken(req.headers.authorization);
-      const { bank } = req.body;
-      if (!bank || !bank.questions) return res.status(400).json({ error: "No bank data provided" });
-
-      const userDoc = await db.doc(`users/${uid}/profile/data`).get();
-      const userName = userDoc.exists ? (userDoc.data()?.name || "Student") : "Student";
-
-      const docRef = db.collection("community_library").doc();
-      await docRef.set({
-        ...bank,
-        authorUid: uid,
-        authorName: userName,
-        downloads: 0,
-        timestamp: admin.firestore.FieldValue.serverTimestamp()
-      });
-
-      res.json({ success: true, id: docRef.id });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
-  });
-
-  // ─── COMMUNITY LIBRARY: Fetch ──────────────────────────────────────────────
+  // ─── USER HISTORY ───────────────────────────────────────────────────────────
   app.get("/api/library", async (req, res) => {
     try {
       const uid = await verifyToken(req.headers.authorization);
@@ -470,99 +437,6 @@ async function startServer() {
       res.status(500).json({ error: err.message });
     }
   });
-
-  app.get("/api/community-library", async (req, res) => {
-    try {
-      const snapshot = await db.collection("community_library")
-        .orderBy("timestamp", "desc")
-        .limit(50)
-        .get();
-
-      const banks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      res.json({ banks });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
-  });
-
-  // ─── CLASSROOM: Create Code ────────────────────────────────────────────────
-  app.post("/api/classroom/create", async (req, res) => {
-    try {
-      const uid = await verifyToken(req.headers.authorization);
-      const { bank } = req.body;
-      if (!bank) return res.status(400).json({ error: "No bank data provided" });
-
-      // Get host name from Firebase Auth
-      const userRecord = await admin.auth().getUser(uid);
-      const creatorName = userRecord.displayName || "Verified User";
-
-      // Generate a unique 6-character alphanumeric code.
-      let code = "";
-      let attempts = 0;
-      while (attempts < 5) {
-        const candidate = Math.random().toString(36).substring(2, 8).toUpperCase();
-        const existing = await db.collection("classrooms").doc(candidate).get();
-        if (!existing.exists) {
-          code = candidate;
-          break;
-        }
-        attempts += 1;
-      }
-
-      if (!code) {
-        return res.status(503).json({ error: "Unable to allocate classroom code. Try again." });
-      }
-
-      await db.collection("classrooms").doc(code).set({
-        ...bank,
-        creatorUid: uid,
-        creatorName,
-        timestamp: admin.firestore.FieldValue.serverTimestamp()
-      });
-
-      console.log(`[Host:Collab] uid=${uid} name=${creatorName} code=${code}`);
-      res.json({ success: true, code });
-    } catch (err: any) {
-      if (err.message === "AUTH_MISSING" || err.message === "AUTH_INVALID") {
-        return res.status(401).json({ error: "Authentication required" });
-      }
-      res.status(500).json({ error: err.message });
-    }
-  });
-
-  // ─── CLASSROOM: Join ───────────────────────────────────────────────────────
-  app.post("/api/classroom/join", async (req, res) => {
-    try {
-      if (!(await enforceRateLimit(req, res, "classroom-join", 30, 60_000))) {
-        return;
-      }
-
-      await verifyToken(req.headers.authorization);
-      const code = String(req.body?.code || "").trim().toUpperCase();
-      if (!code) return res.status(400).json({ error: "Code required" });
-      if (!/^[A-Z0-9]{6}$/.test(code)) {
-        return res.status(400).json({ error: "Invalid classroom code format" });
-      }
-
-      const classroomRef = db.collection("classrooms").doc(code);
-      const doc = await classroomRef.get();
-      if (!doc.exists) return res.status(404).json({ error: "Classroom not found" });
-
-      // Increment student count for the teacher dashboard
-      await classroomRef.update({
-        memberCount: admin.firestore.FieldValue.increment(1)
-      }).catch(() => { });
-
-      res.json({ success: true, ...doc.data() });
-    } catch (err: any) {
-      if (err.message === "AUTH_MISSING" || err.message === "AUTH_INVALID") {
-        return res.status(401).json({ error: "Authentication required" });
-      }
-      res.status(500).json({ error: err.message });
-    }
-  });
-
-
 
   // ─── SECURE SCAN PIPELINE ─────────────────────────────────────────────────
   // Domain-first retrieval with adaptive top-up and open-web rescue only if floor is missed.
@@ -616,42 +490,20 @@ async function startServer() {
       const subjectLabel = subject || "Chemistry";
 
 
-      // ─── SEMANTIC CACHE CHECK (Hybrid Pinecone + Firestore) ──────────────
+      // ─── CACHE CHECK (Firestore exact match only) ─────────────────────────
       let cachedData: any = null;
       let cachedDocId: string | null = null;
       const isTopicOnly = imageList.length === 0;
       const cacheKey = getCacheKey(subjectLabel, topic || "", examList);
 
       if (isTopicOnly) {
-        // 1. Try Exact Match First (Fastest/Cheapest)
+        // Exact match lookup keeps cost low and avoids vector index usage.
         const cacheRef = db.collection("global_cache").doc(cacheKey);
         const cacheDoc = await cacheRef.get();
         if (cacheDoc.exists) {
           console.log(`[Cache:EXACT_HIT] key=${cacheKey}`);
           cachedData = cacheDoc.data();
           cachedDocId = cacheKey;
-        } else {
-          // 2. Try Semantic Match (Pinecone)
-          console.log(`[Cache:SEMANTIC_PULL] topic="${topic}"`);
-          const vector = await getTopicEmbedding(topic || "");
-          const index = getPineconeIndex();
-          if (vector && index) {
-            const queryResponse = await index.query({
-              vector,
-              topK: 1,
-              includeMetadata: true,
-            });
-
-            const bestMatch = queryResponse.matches[0];
-            if (bestMatch && bestMatch.score && bestMatch.score > 0.88) {
-              const semanticDoc = await db.collection("global_cache").doc(bestMatch.id).get();
-              if (semanticDoc.exists) {
-                console.log(`[Cache:SEMANTIC_HIT] score=${bestMatch.score.toFixed(3)} topicDetected="${bestMatch.metadata?.topicDetected}"`);
-                cachedData = semanticDoc.data();
-                cachedDocId = bestMatch.id;
-              }
-            }
-          }
         }
 
         if (cachedData) {
@@ -669,6 +521,7 @@ async function startServer() {
               summary: cachedData.summary,
               keywords: cachedData.keywords || [],
               questions: cachedData.questions || [],
+              questionCount: Array.isArray(cachedData.questions) ? cachedData.questions.length : 0,
             };
             
             // Save to user's personal history so it appears in their library
@@ -694,9 +547,13 @@ async function startServer() {
 
       const geminiKey = process.env.GEMINI_API_KEY;
       const tavilyKey = process.env.TAVILY_API_KEY;
-      if (!DRY_RUN && (!geminiKey || !tavilyKey)) {
-        console.error("Missing API Keys: GEMINI_API_KEY or TAVILY_API_KEY not found in environment.");
-        return res.status(500).json({ error: "Server API keys not configured." });
+      if (!DRY_RUN && (isPlaceholderSecret(geminiKey) || isPlaceholderSecret(tavilyKey))) {
+        console.error(
+          `[Config] Missing/placeholder API keys for scan. envSource=${loadedEnvPath || "process env"}`
+        );
+        return res.status(500).json({
+          error: "Server API keys not configured. Set valid GEMINI_API_KEY and TAVILY_API_KEY, then restart the server.",
+        });
       }
 
       let ai: any;
@@ -772,11 +629,19 @@ async function startServer() {
       }
       let geminiCallCount = 0;
 
-      const generateWithRetry = (config: any) =>
-        withRetry(() => {
-          geminiCallCount += 1;
-          return ai.models.generateContent(config);
-        });
+      const generateWithFailFast = async (config: any) => {
+        geminiCallCount += 1;
+        try {
+          return await ai.models.generateContent(config);
+        } catch (err: any) {
+          if (isUpstreamUnavailableError(err)) {
+            const busyError: any = new Error(UPSTREAM_BUSY_MESSAGE);
+            busyError.status = 503;
+            throw busyError;
+          }
+          throw err;
+        }
+      };
 
       // Tracking for adaptive rescue and domain prioritization
       let usedQueries: string[] = [];
@@ -858,7 +723,7 @@ async function startServer() {
             `Examples: ${subjectLabel} HOTS assertion reason questions ${topic} ${allExams}`,
           ].join("\n");
 
-          const response = await generateWithRetry({
+          const response = await generateWithFailFast({
               model: GEMINI_GENERATION_MODEL,
               contents: { parts: [{ text: topicPrompt }] },
               config: {
@@ -896,7 +761,7 @@ async function startServer() {
             "Include synonyms and common exam phrasing to improve recall across sources.",
           ].join("\n");
 
-          const analysisResponse = await generateWithRetry({
+          const analysisResponse = await generateWithFailFast({
               model: GEMINI_GENERATION_MODEL,
               contents: { parts: [...contentParts, { text: analysisPrompt }] },
               config: {
@@ -918,7 +783,10 @@ async function startServer() {
       } catch (err: any) {
         console.error("Gemini Vision Error:", err);
         await profileRef.update({ credits: admin.firestore.FieldValue.increment(1) }).catch(() => { });
-        return res.status(400).json({ error: "The AI safety filters blocked this content or the model is unavailable. Please ensure your notes are subject-appropriate." });
+        if (isUpstreamUnavailableError(err) || err?.status === 503) {
+          return res.status(503).json({ error: UPSTREAM_BUSY_MESSAGE });
+        }
+        return res.status(400).json({ error: "The AI safety filters blocked this content. Please ensure your notes are subject-appropriate." });
       }
 
       let analysis: any = {};
@@ -966,6 +834,11 @@ async function startServer() {
             maxResults: TAVILY_MAX_RESULTS,
             ...(includeDomainsOpt ? { includeDomains: includeDomainsOpt } : {}),
           }).catch((err) => {
+            if (isUpstreamUnavailableError(err)) {
+              const busyError: any = new Error(UPSTREAM_BUSY_MESSAGE);
+              busyError.status = 503;
+              throw busyError;
+            }
             console.error(`Tavily search failed: ${q}`, err?.message || err);
             return { results: [] };
           })
@@ -1089,7 +962,7 @@ async function startServer() {
 
       // MARK: structuring phase start
       metrics.timers.structuring_start = Date.now();
-      const structureResponse = await generateWithRetry({
+      const structureResponse = await generateWithFailFast({
           model: GEMINI_GENERATION_MODEL,
           contents: structurePrompt,
           config: {
@@ -1134,11 +1007,13 @@ async function startServer() {
       const normalizeQuestion = (raw: any) => {
         if (!raw || typeof raw !== "object") return null;
 
-        const rawText = String(raw.text || raw.question || "").trim();
+        const rawText = normalizeMathText(String(raw.text || raw.question || "").trim());
         if (!rawText) return null;
 
         let options = Array.isArray(raw.options)
-          ? raw.options.filter((opt: any) => typeof opt === "string" && opt.trim().length > 0).map((opt: string) => opt.trim())
+          ? raw.options
+              .filter((opt: any) => typeof opt === "string" && opt.trim().length > 0)
+              .map((opt: string) => normalizeMathText(opt.trim()))
           : [];
 
         const optionFillers = ["Option A", "Option B", "Option C", "Option D"];
@@ -1147,10 +1022,10 @@ async function startServer() {
         }
         if (options.length > 4) options = options.slice(0, 4);
 
-        const answer = String(raw.answer || options[0] || "Option A").trim();
-        const cleanedSource = String(raw.source || "")
+        const answer = normalizeMathText(String(raw.answer || options[0] || "Option A").trim());
+        const cleanedSource = normalizeMathText(String(raw.source || "")
           .replace(/https?:\/\/[^\s]+/g, "")
-          .trim() || "Standard Practice Question";
+          .trim()) || "Standard Practice Question";
         const rawType = String(raw.type || "Practice").trim();
         const normalizedType = ["PYQ", "Sample Paper", "HOTS", "Practice"].includes(rawType)
           ? rawType
@@ -1163,8 +1038,8 @@ async function startServer() {
           source: cleanedSource,
           year: String(raw.year || new Date().getFullYear()),
           type: normalizedType,
-          targetExam: String(raw.targetExam || primaryExam || "General"),
-          topic: String(raw.topic || analysis.topicDetected || topicSeed || "General"),
+          targetExam: normalizeMathText(String(raw.targetExam || primaryExam || "General")),
+          topic: normalizeMathText(String(raw.topic || analysis.topicDetected || topicSeed || "General")),
         };
       };
 
@@ -1185,7 +1060,7 @@ async function startServer() {
           ].join("\n");
 
           metrics.json_repair_attempts += 1;
-          const repaired = await generateWithRetry({
+          const repaired = await generateWithFailFast({
               model: GEMINI_GENERATION_MODEL,
               contents: repairPrompt,
               config: {
@@ -1276,7 +1151,7 @@ async function startServer() {
         ].join("\n");
 
         try {
-          const topUpResponse = await generateWithRetry({
+          const topUpResponse = await generateWithFailFast({
               model: GEMINI_GENERATION_MODEL,
               contents: topUpPrompt,
               config: {
@@ -1324,7 +1199,7 @@ async function startServer() {
               ].join("\n");
 
               metrics.json_repair_attempts += 1;
-              const repaired = await generateWithRetry({
+              const repaired = await generateWithFailFast({
                 model: GEMINI_GENERATION_MODEL,
                 contents: repairPrompt,
                 config: {
@@ -1410,7 +1285,7 @@ async function startServer() {
             `Per-domain yields: ${JSON.stringify(domainYield)}`,
           ].join("\n");
 
-          const rewriteResp = await generateWithRetry({
+          const rewriteResp = await generateWithFailFast({
             model: GEMINI_GENERATION_MODEL,
             contents: { parts: [{ text: rewritePrompt }] },
             config: {
@@ -1528,7 +1403,7 @@ async function startServer() {
           ].join("\n");
 
           try {
-            const rescueResponse = await generateWithRetry({
+            const rescueResponse = await generateWithFailFast({
               model: GEMINI_GENERATION_MODEL,
               contents: rescuePrompt,
               config: {
@@ -1575,7 +1450,7 @@ async function startServer() {
                   String(rescueResponse.text || "").slice(0, 20000),
                 ].join("\n");
 
-                const repaired = await generateWithRetry({
+                const repaired = await generateWithFailFast({
                   model: GEMINI_GENERATION_MODEL,
                   contents: repairPrompt,
                   config: {
@@ -1641,10 +1516,11 @@ async function startServer() {
       }
 
       const finalResult = {
-        topicDetected: analysis.topicDetected || topic,
-        summary: analysis.summary,
+        topicDetected: normalizeMathText(String(analysis.topicDetected || topic || "Untitled Topic")),
+        summary: normalizeMathText(String(analysis.summary || "")),
         keywords: analysis.keywords || [],
         questions: structured.questions || [],
+        questionCount: Array.isArray(structured.questions) ? structured.questions.length : 0,
       };
 
       // When in DRY_RUN, include diagnostics and internal metrics for easier local metrics collection
@@ -1689,10 +1565,9 @@ async function startServer() {
 
       res.json(finalResult);
 
-      // ─── SAVE TO CACHE (Hybrid Firestore + Pinecone) ─────────────────────
+      // ─── SAVE TO CACHE (Firestore only) ───────────────────────────────────
       if ((structured.questions?.length || 0) >= CACHE_MIN_QUESTIONS) {
-        // Gate cache/discovery/pinecone saves behind a verifier to ensure only
-        // high-quality reports enter the Knowledge Map.
+        // Gate cache saves behind a verifier to preserve retrieval quality.
         let passVerification = true;
         try {
           const replyText = [finalResult.summary || '', ...(finalResult.questions || []).map((q: any) => q?.text || '')].join('\n\n');
@@ -1708,55 +1583,19 @@ async function startServer() {
         }
 
         if (!passVerification) {
-          console.log(`[Cache] Skipping Knowledge Map save for key=${cacheKey} due to verification failure.`);
+          console.log(`[Cache] Skipping cache save for key=${cacheKey} due to verification failure.`);
         } else {
-          // Save to Firestore (Anonymized)
+          // Save exact-match cache entry for low-cost retrieval.
           db.collection("global_cache").doc(cacheKey).set({
-            topicDetected: analysis.topicDetected || topic,
-            summary: analysis.summary,
+            topicDetected: finalResult.topicDetected,
+            summary: finalResult.summary,
             keywords: analysis.keywords || [],
             questions: structured.questions,
+            questionCount: finalResult.questionCount,
             subject: subjectLabel,
             exams: examList,
             timestamp: admin.firestore.FieldValue.serverTimestamp()
           }).catch(err => console.error("[Cache:SaveError:Firestore]", err));
-
-          // Save keywords to discovery collection for the Knowledge Map
-          const keywords = analysis.keywords || [];
-          keywords.forEach((kw: string) => {
-            const kwId = kw.toLowerCase().replace(/\s+/g, "_");
-            db.collection("discovery").doc(kwId).set({
-              name: kw,
-              type: "keyword",
-              subject: subjectLabel,
-              lastSeen: admin.firestore.FieldValue.serverTimestamp()
-            }, { merge: true }).catch(() => { });
-
-            // Link keyword to this topic
-            db.collection("discovery").doc(`${kwId}_${cacheKey}`).set({
-              source: kwId,
-              target: cacheKey,
-              type: "link",
-              timestamp: admin.firestore.FieldValue.serverTimestamp()
-            }).catch(() => { });
-          });
-
-          // Save to Pinecone
-          (async () => {
-            const vector = await getTopicEmbedding(analysis.topicDetected || topic);
-            if (vector) {
-              await pcIndex.upsert({
-                records: [{
-                  id: cacheKey,
-                  values: vector,
-                  metadata: {
-                    topicDetected: analysis.topicDetected || topic,
-                    subject: subjectLabel
-                  }
-                }]
-              });
-            }
-          })().catch(err => console.error("[Cache:SaveError:Pinecone]", err));
         }
       } else {
         console.log(`[Cache:SKIP_LOW_QUALITY] key=${cacheKey} questions=${structured.questions?.length || 0}`);
@@ -1769,218 +1608,18 @@ async function startServer() {
           .catch(() => { });
       }
       console.error("Scan error details:", error);
+
+      if (isUpstreamUnavailableError(error) || error?.status === 503) {
+        return res.status(503).json({ error: UPSTREAM_BUSY_MESSAGE });
+      }
+
       const message = error.message || "Internal server error";
       res.status(500).json({ error: message });
     }
   });
 
-  // ─── Knowledge Map API ────────────────────────────────────────────────────────
-  app.get("/api/graph-data", async (req, res) => {
-    try {
-      // 1. Fetch latest 100 discoveries from global_cache (the true "Search Graph")
-      const cacheSnap = await db.collection("global_cache")
-        .orderBy("timestamp", "desc")
-        .limit(100)
-        .get();
-
-      const nodeMap = new Map();
-      const links: any[] = [];
-      const nodes: any[] = [];
-
-      cacheSnap.docs.forEach(doc => {
-        const data = doc.data();
-        const id = doc.id;
-        const topic = data.topicDetected || data.topic || "Discovery";
-        const subject = data.subject || "General";
-        const keywords = Array.isArray(data.keywords) ? data.keywords : [];
-
-        if (!nodeMap.has(id)) {
-          const mainNode = {
-            id,
-            name: topic,
-            group: subject,
-            value: 8, // Larger for main topics
-            keywords: keywords,
-            type: "topic"
-          };
-          nodeMap.set(id, mainNode);
-          nodes.push(mainNode);
-        }
-      });
-
-      // 2. Add keywords from discovery collection for granular nodes
-      const discoverySnap = await db.collection("discovery")
-        .where("type", "==", "keyword")
-        .limit(200)
-        .get();
-
-      discoverySnap.docs.forEach(doc => {
-        const data = doc.data();
-        const id = doc.id;
-        if (!nodeMap.has(id)) {
-          const kwNode = {
-            id,
-            name: data.name,
-            group: data.subject || "General",
-            value: 2, // Smaller for keywords
-            type: "keyword"
-          };
-          nodeMap.set(id, kwNode);
-          nodes.push(kwNode);
-        }
-      });
-
-      // 3. Add links from discovery collection
-      const linksSnap = await db.collection("discovery")
-        .where("type", "==", "link")
-        .limit(300)
-        .get();
-
-      linksSnap.docs.forEach(doc => {
-        const data = doc.data();
-        if (nodeMap.has(data.source) && nodeMap.has(data.target)) {
-          links.push({
-            source: data.source,
-            target: data.target,
-            value: 1,
-            type: "discovery-link"
-          });
-        }
-      });
-
-      // 4. Fallback cross-link nodes based on shared subject
-      for (let i = 0; i < nodes.length; i++) {
-        for (let j = i + 1; j < nodes.length; j++) {
-          const n1 = nodes[i];
-          const n2 = nodes[j];
-          if (n1.type === "topic" && n2.type === "topic" && n1.group === n2.group) {
-            links.push({ source: n1.id, target: n2.id, value: 0.5, type: "subject-link" });
-          }
-        }
-      }
-
-      res.json({ nodes, links });
-    } catch (err) {
-      console.error("[GraphData:Error]", err);
-      res.status(500).json({ error: "Failed to fetch map data" });
-    }
-  });
-
-
-  // ─── Admin Migration Endpoint (One-time use) ──────────────────────────────────
-  app.post("/api/admin/backfill", async (req, res) => {
-    try {
-      // Verify admin token or secret
-      const adminSecret = process.env.ADMIN_SECRET;
-      const authHeader = req.headers.authorization;
-      
-      // Check for valid admin authentication
-      let isAdmin = false;
-      
-      // Method 1: Admin secret in header
-      if (adminSecret && authHeader === `Bearer ${adminSecret}`) {
-        isAdmin = true;
-      }
-      
-      // Method 2: Firebase ID token with admin claim
-      if (!isAdmin && authHeader) {
-        try {
-          const uid = await verifyToken(authHeader);
-          const userRecord = await admin.auth().getUser(uid);
-          isAdmin = userRecord.customClaims?.admin === true;
-        } catch {
-          isAdmin = false;
-        }
-      }
-      
-      if (!isAdmin) {
-        console.warn("[Admin:Unauthorized] Backfill attempt without proper auth");
-        return res.status(403).json({ error: "Forbidden: Admin access required" });
-      }
-
-      const snap = await db.collection("global_cache").get();
-      let vectorizedCount = 0;
-
-      for (const doc of snap.docs) {
-        const data = doc.data();
-        const topic = data.topicDetected || "Unknown";
-        const subject = data.subject || "General";
-        const id = doc.id;
-
-        // Vectorize and upsert
-        const vector = await getTopicEmbedding(topic);
-        if (vector) {
-          await pcIndex.upsert({
-            records: [{
-              id,
-              values: vector,
-              metadata: { topicDetected: topic, subject }
-            }]
-          });
-          vectorizedCount++;
-        }
-      }
-      console.log(`[Admin:Backfill:Complete] Processed ${snap.size} items, vectorized ${vectorizedCount}`);
-      res.json({ success: true, processed: snap.size, vectorized: vectorizedCount });
-    } catch (err) {
-      console.error("[Admin:Backfill:Error]", err);
-      res.status(500).json({ error: "Backfill failed" });
-    }
-  });
-
-  // Verify assistant reply endpoint — runs the verifier script and returns report.
-  app.post("/api/verify-response", async (req, res) => {
-    try {
-      if (!(await enforceRateLimit(req, res, "verify-response", 20, 60_000))) {
-        return;
-      }
-
-      const text = req.body?.text;
-      if (typeof text !== "string" || text.trim().length === 0) {
-        return res.status(400).json({ error: "Missing text body (text)" });
-      }
-      if (text.length > 25_000) {
-        return res.status(413).json({ error: "Input too large. Maximum 25000 characters allowed." });
-      }
-
-      // Try in-process verifier first for lower latency
-      try {
-        const result = await verifyTextInProcess(text);
-        return res.status(200).json({ ok: result.ok, code: result.ok ? 0 : 1, report: result.report, source: 'in-process' });
-      } catch (inErr) {
-        console.warn('[verifier] in-process failed, falling back to child process', inErr?.message || inErr);
-      }
-
-      // Fallback: spawn the existing verifier script
-      const scriptPath = path.join(process.cwd(), "scripts", "verify_response.js");
-      const child = spawn("node", [scriptPath], { stdio: ["pipe", "pipe", "pipe"] });
-
-      let stdout = "";
-      let stderr = "";
-      child.stdout.on("data", (chunk) => (stdout += chunk.toString()));
-      child.stderr.on("data", (chunk) => (stderr += chunk.toString()));
-
-      child.on("error", (err) => {
-        console.error("[verifier] spawn error", err);
-      });
-
-      child.stdin.write(text);
-      child.stdin.end();
-
-      child.on("close", (code) => {
-        if (stderr) console.error("[verifier] stderr", stderr);
-        try {
-          const report = stdout ? JSON.parse(stdout) : {};
-          return res.status(200).json({ ok: code === 0, code, report, source: 'child-process' });
-        } catch (err) {
-          console.error("[verifier] parse error", err, "stdout:", stdout, "stderr:", stderr);
-          return res.status(500).json({ error: "verifier parse error", stdout, stderr });
-        }
-      });
-    } catch (err) {
-      handleError(res, err, "verify-response");
-    }
-  });
+  // Additional graph/community/admin routes are intentionally disabled in v1
+  // to keep operational cost and maintenance footprint minimal.
 
   // ─── Serve frontend ───────────────────────────────────────────────────────
   if (process.env.NODE_ENV !== "production") {

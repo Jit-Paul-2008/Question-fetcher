@@ -1,5 +1,5 @@
 import React from "react";
-import { LogOut, Gem, Sun, Moon, FlaskConical, LayoutGrid, Library, Users, Map, Settings, ChevronRight, Activity, ShieldCheck, Database } from "lucide-react";
+import { LogOut, Gem, Sun, Moon, FlaskConical, LayoutGrid, Library, FileText, Settings, ChevronRight, Activity, ShieldCheck, Database } from "lucide-react";
 import { ActiveTab, Theme } from "../../lib/types";
 
 interface ShellProps {
@@ -24,10 +24,9 @@ export function Shell({
   onOpenBuyModal
 }: ShellProps) {
   const navItems = [
-    { id: "generator", label: "Synthesis Core", icon: LayoutGrid, desc: "AI Question Engine" },
-    { id: "library", label: "Tactical Archive", icon: Library, desc: "Personal Vault" },
-    { id: "classrooms", label: "Strategic Ops", icon: Users, desc: "Collaborative Nodes" },
-    { id: "map", label: "Neural Net", icon: Map, desc: "Knowledge Graph" },
+    { id: "generator", label: "Synthesis Core", icon: LayoutGrid, desc: "AI Retrieval Engine" },
+    { id: "history", label: "Archive", icon: Library, desc: "Personal History" },
+    { id: "results", label: "Current Result", icon: FileText, desc: "Question Set Viewer" },
   ];
 
   return (
@@ -215,7 +214,7 @@ export function Shell({
 
       {/* Aesthetic Scan-line Decal */}
       <div className="fixed inset-0 pointer-events-none z-[100] overflow-hidden opacity-[0.02]">
-        <div className="w-full h-[1px] bg-primary animate-scan" style={{ boxShadow: '0 0 10px var(--glow-cyan)' }} />
+        <div className="w-full h-[1px] bg-primary animate-scan" />
       </div>
     </div>
   );
