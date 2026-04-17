@@ -9,4 +9,6 @@ coverage/
 
 # Secrets and service account keys
 secrets/firebase-service-account.json
+question-fetcher/secrets/
+question-fetcher/secrets/*.json
 gen-lang-client-0312116426-a1e42b97f0e8.json

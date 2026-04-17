@@ -1,0 +1,12 @@
+{
+  "name": "question-fetcher-workspace",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "npm --prefix question-fetcher run dev",
+    "build": "npm --prefix question-fetcher run build",
+    "lint": "npm --prefix question-fetcher run lint",
+    "start": "npm --prefix question-fetcher run start",
+    "clean": "npm --prefix question-fetcher run clean"
+  }
+}
